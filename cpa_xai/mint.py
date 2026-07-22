@@ -96,16 +96,21 @@ def mint_and_export(
         pr = probe_models(tokens["access_token"], base_url=base_url, proxy=resolved or None)
         result["probe_models"] = pr
         log(f"probe models: ok={pr.get('ok')} has_grok_45={pr.get('has_grok_45')}")
-        if not pr.get("has_grok_45"):
+        if not pr.get("ok"):
+            result["ok"] = False
+            result["error"] = str(pr.get("error") or f"models probe HTTP {pr.get('status')}")
+        elif not pr.get("has_grok_45"):
             result["ok"] = False
             result["error"] = "token ok but grok-4.5 not listed"
-        if probe_chat and pr.get("has_grok_45"):
+        if result.get("ok") and probe_chat:
             ch = probe_mini_response(
                 tokens["access_token"], base_url=base_url, proxy=resolved or None
             )
             result["probe_chat"] = ch
-            log(f"probe chat: ok={ch.get('ok')}")
+            status = ch.get("status")
+            log(f"probe chat: ok={ch.get('ok')} status={status}")
             if not ch.get("ok"):
                 result["ok"] = False
-                result["error"] = f"chat probe failed: {ch.get('error') or ch.get('status')}"
+                result["error"] = str(ch.get("error") or f"chat probe HTTP {status}")
+                result["validation_failed"] = True
     return result

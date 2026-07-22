@@ -1005,11 +1005,16 @@ class GrokRegisterGUI:
                             log_callback=log_fn, page=_cpa_bg_page,
                         )
                         if r.get("ok"):
-                            log_fn(f"[+] Ekspor CPA xAI Sukses: {r.get('path', '')}")
+                            log_fn(f"[+] Ekspor CPA xAI Sukses (chat OK): {r.get('path', '')}")
                         elif not r.get("skipped"):
-                            log_fn(f"[!] Ekspor CPA xAI Gagal: {r.get('error', 'Kesalahan tidak diketahui')}")
+                            err = r.get("error", "Kesalahan tidak diketahui")
+                            log_fn(f"[!] Ekspor/validasi CPA Gagal: {err}")
+                            if r.get("validation_failed") or "402" in str(err):
+                                with _stats_lock:
+                                    self.fail_count += 1
+                                log_fn(f"[-] Akun dicatat gagal (chat/model tidak usable): {email}")
                     except Exception as e:
-                        log_fn(f"[!] Pengecualian ekspor CPA xAI: {e}")
+                        log_fn(f"[!] Pengecualian ekspor CPA xAI: {type(e).__name__}")
                 _t = threading.Thread(target=_cpa_mint_bg, daemon=True)
                 _t.start()
                 _track_cpa_async_thread(_t)
@@ -1020,9 +1025,14 @@ class GrokRegisterGUI:
                     log_callback=log_fn, page=_cpa_page,
                 )
                 if cpa_result.get("ok"):
-                    log_fn(f"[+] Ekspor CPA xAI Sukses: {cpa_result.get('path', '')}")
+                    log_fn(f"[+] Ekspor CPA xAI Sukses (chat OK): {cpa_result.get('path', '')}")
                 elif not cpa_result.get("skipped"):
-                    log_fn(f"[!] Ekspor CPA xAI Gagal: {cpa_result.get('error', 'Kesalahan tidak diketahui')}")
+                    err = cpa_result.get("error", "Kesalahan tidak diketahui")
+                    log_fn(f"[!] Ekspor/validasi CPA Gagal: {err}")
+                    if cpa_result.get("validation_failed") or "402" in str(err):
+                        with _stats_lock:
+                            self.fail_count += 1
+                        log_fn(f"[-] Akun dicatat gagal (chat/model tidak usable): {email}")
         if config.get("enable_nsfw", True):
             log_fn("[*] 6. Mengaktifkan NSFW")
             nsfw_ok, nsfw_msg = enable_nsfw_for_token(sso, log_callback=log_fn)

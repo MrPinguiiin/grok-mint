@@ -23,6 +23,7 @@
   "cpa_proxy": "",
   "cpa_headless": false,
   "cpa_probe_after_write": true,
+  "cpa_probe_chat": true,
   "cpa_mint_timeout_sec": 240,
   "cpa_base_url": "https://cli-chat-proxy.grok.com/v1",
   "cpa_force_standalone": false,

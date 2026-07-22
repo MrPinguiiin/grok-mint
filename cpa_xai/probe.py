@@ -46,10 +46,14 @@ def probe_models(
                 "has_grok_45": any(i == "grok-4.5" for i in ids),
             }
     except urllib.error.HTTPError as e:
+        try:
+            e.read()
+        except Exception:
+            pass
         return {
             "ok": False,
             "status": e.code,
-            "error": "models probe HTTP error",
+            "error": f"models probe HTTP {e.code}",
             "model_ids": [],
             "has_grok_45": False,
         }
@@ -108,10 +112,17 @@ def probe_mini_response(
                 "usage": body.get("usage"),
             }
     except urllib.error.HTTPError as e:
+        try:
+            e.read()
+        except Exception:
+            pass
+        err = f"chat probe HTTP {e.code}"
+        if e.code == 402:
+            err = "HTTP 402 out of credits / need subscription"
         return {
             "ok": False,
             "status": e.code,
-            "error": "chat probe HTTP error",
+            "error": err,
         }
     except Exception as e:  # noqa: BLE001
         return {"ok": False, "status": 0, "error": str(e)}

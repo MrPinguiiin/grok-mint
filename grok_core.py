@@ -1529,6 +1529,53 @@ def export_cpa_xai_for_account(
             except Exception as exc:
                 result["nine_router"] = {"ok": False, "error": str(exc)}
                 log(f"[9router] auto-import failed: {exc}")
+                result["ok"] = False
+                result["error"] = f"9router import failed: {exc}"
+                return result
+
+            # After import: real model/chat hit. /models alone misses HTTP 402.
+            if config.get("cpa_probe_chat", True) and not result.get("probe_chat"):
+                try:
+                    from cpa_xai.probe import probe_mini_response
+                    from cpa_xai.schema import DEFAULT_BASE_URL
+                    payload = json.loads(Path(result["path"]).read_text(encoding="utf-8"))
+                    access = str(payload.get("access_token") or "").strip()
+                    base_url = str(
+                        payload.get("base_url")
+                        or config.get("cpa_base_url")
+                        or DEFAULT_BASE_URL
+                    ).strip()
+                    log("[9router] validating chat/model after import...")
+                    ch = probe_mini_response(access, base_url=base_url)
+                    result["probe_chat"] = ch
+                    if ch.get("ok"):
+                        log("[9router] chat validation OK")
+                    else:
+                        err = str(ch.get("error") or f"HTTP {ch.get('status')}")
+                        log(f"[9router] chat validation FAILED: {err}")
+                        result["ok"] = False
+                        result["error"] = err
+                        result["validation_failed"] = True
+                        deactivate_9router_connection(
+                            email, reason=err, log_callback=log
+                        )
+                except Exception as probe_exc:
+                    log(f"[9router] chat validation error: {type(probe_exc).__name__}")
+                    result["ok"] = False
+                    result["error"] = "chat validation error"
+                    result["validation_failed"] = True
+                    deactivate_9router_connection(
+                        email, reason="chat validation error", log_callback=log
+                    )
+            elif result.get("probe_chat") and not result.get("probe_chat", {}).get("ok"):
+                err = str(
+                    (result.get("probe_chat") or {}).get("error")
+                    or "chat probe failed"
+                )
+                result["ok"] = False
+                result["error"] = err
+                result["validation_failed"] = True
+                deactivate_9router_connection(email, reason=err, log_callback=log)
         return result
     except Exception as e:
         log(f"[cpa] export failed: {type(e).__name__}")
@@ -1544,6 +1591,57 @@ def _jwt_payload(token: str) -> dict[str, Any]:
 
 _9router_lock = threading.Lock()
 _9router_session_backed_up = False
+
+def deactivate_9router_connection(
+    email: str,
+    *,
+    reason: str = "",
+    log_callback: Callable[[str], None] | None = None,
+) -> bool:
+    """Mark a grok-cli connection inactive after failed post-import validation."""
+    log = log_callback or (lambda m: None)
+    email = (email or "").strip()
+    if not email:
+        return False
+    with _9router_lock:
+        db_path = Path(
+            config.get("nine_router_db_path")
+            or Path.home() / ".9router" / "db" / "data.sqlite"
+        ).expanduser().resolve()
+        if not db_path.is_file():
+            return False
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
+        try:
+            with sqlite3.connect(str(db_path), timeout=30) as connection:
+                connection.execute("PRAGMA busy_timeout=30000")
+                rows = connection.execute(
+                    "SELECT id, data FROM providerConnections "
+                    "WHERE provider IN ('grok-cli', 'xai') AND email = ?",
+                    (email,),
+                ).fetchall()
+                if not rows:
+                    return False
+                for row_id, raw in rows:
+                    data: dict[str, Any] = {}
+                    try:
+                        data = json.loads(raw) if raw else {}
+                    except Exception:
+                        data = {}
+                    if not isinstance(data, dict):
+                        data = {}
+                    data["testStatus"] = "failed"
+                    data["lastError"] = (reason or "validation failed")[:200]
+                    data["lastErrorAt"] = now
+                    connection.execute(
+                        "UPDATE providerConnections SET isActive=0, data=?, updatedAt=? WHERE id=?",
+                        (json.dumps(data, separators=(",", ":")), now, row_id),
+                    )
+                connection.commit()
+            log(f"[9router] deactivated unusable connection: {email}")
+            return True
+        except Exception as exc:
+            log(f"[9router] deactivate failed: {type(exc).__name__}")
+            return False
 
 def import_cpa_to_9router(
     credential_path: str | os.PathLike[str],

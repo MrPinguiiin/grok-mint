@@ -111,8 +111,9 @@ def export_cpa_xai_for_account(
         ).strip()
     # Default headed: headless is frequently Cloudflare-blocked on accounts.x.ai
     headless = bool(cfg.get("cpa_headless", False))
-    probe = bool(cfg.get("cpa_probe_after_write", False))
-    probe_chat = bool(cfg.get("cpa_probe_chat", False))
+    probe = bool(cfg.get("cpa_probe_after_write", True))
+    # Chat probe catches free-tier 402 that /models alone does not.
+    probe_chat = bool(cfg.get("cpa_probe_chat", True))
     timeout = float(cfg.get("cpa_mint_timeout_sec", 240))
     base_url = cfg.get("cpa_base_url") or "https://cli-chat-proxy.grok.com/v1"
     cpa_headers = cfg.get("cpa_headers") or None
