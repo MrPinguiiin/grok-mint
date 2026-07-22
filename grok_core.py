@@ -1542,6 +1542,8 @@ def _jwt_payload(token: str) -> dict[str, Any]:
     except Exception:
         return {}
 
+_9router_lock = threading.Lock()
+
 def import_cpa_to_9router(
     credential_path: str | os.PathLike[str],
     log_callback: Callable[[str], None] | None = None,
@@ -1560,102 +1562,103 @@ def import_cpa_to_9router(
     if not email or not access_token or not refresh_token:
         raise RuntimeError("xAI credential is missing email/access_token/refresh_token")
 
-    db_path = Path(
-        config.get("nine_router_db_path")
-        or Path.home() / ".9router" / "db" / "data.sqlite"
-    ).expanduser().resolve()
-    if not db_path.is_file():
-        raise RuntimeError(f"9Router database not found: {db_path}")
+    with _9router_lock:
+        db_path = Path(
+            config.get("nine_router_db_path")
+            or Path.home() / ".9router" / "db" / "data.sqlite"
+        ).expanduser().resolve()
+        if not db_path.is_file():
+            raise RuntimeError(f"9Router database not found: {db_path}")
 
-    backup_dir = db_path.parent / "backups" / "grok-mint"
-    backup_dir.mkdir(parents=True, exist_ok=True)
-    os.chmod(backup_dir, 0o700)
-    backup_path = backup_dir / f"data-{time.strftime('%Y%m%d-%H%M%S')}.sqlite"
-    fd = os.open(backup_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    os.close(fd)
-    with sqlite3.connect(str(db_path), timeout=30) as source:
-        with sqlite3.connect(str(backup_path)) as destination:
-            source.backup(destination)
-    os.chmod(backup_path, 0o600)
+        backup_dir = db_path.parent / "backups" / "grok-mint"
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        os.chmod(backup_dir, 0o700)
+        backup_path = backup_dir / f"data-{time.strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(4)}.sqlite"
+        fd = os.open(backup_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        os.close(fd)
+        with sqlite3.connect(str(db_path), timeout=30) as source:
+            with sqlite3.connect(str(backup_path)) as destination:
+                source.backup(destination)
+        os.chmod(backup_path, 0o600)
 
-    now = datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
-    access_claims = _jwt_payload(access_token)
-    scope = str(access_claims.get("scope") or "")
-    expires_in = int(payload.get("expires_in") or 21600)
-    expires_at = str(payload.get("expired") or "")
-    if not expires_at:
-        expires_at = (
-            datetime.datetime.now(datetime.timezone.utc)
-            + datetime.timedelta(seconds=expires_in)
-        ).isoformat().replace("+00:00", "Z")
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
+        access_claims = _jwt_payload(access_token)
+        scope = str(access_claims.get("scope") or "")
+        expires_in = int(payload.get("expires_in") or 21600)
+        expires_at = str(payload.get("expired") or "")
+        if not expires_at:
+            expires_at = (
+                datetime.datetime.now(datetime.timezone.utc)
+                + datetime.timedelta(seconds=expires_in)
+            ).isoformat().replace("+00:00", "Z")
 
-    principal_id = str(payload.get("sub") or access_claims.get("principal_id") or "").strip()
-    data = {
-        "accessToken": access_token,
-        "refreshToken": refresh_token,
-        "idToken": id_token or None,
-        "expiresAt": expires_at,
-        "expiresIn": expires_in,
-        "scope": scope,
-        "testStatus": "active",
-        "providerSpecificData": {
-            "authMethod": "device_code",
-            "email": email,
-            "userId": principal_id or None,
-            "principalId": principal_id or None,
-            "deviceId": principal_id or str(uuidlib.uuid4()),
+        principal_id = str(payload.get("sub") or access_claims.get("principal_id") or "").strip()
+        data = {
+            "accessToken": access_token,
+            "refreshToken": refresh_token,
             "idToken": id_token or None,
-            "hasGrokCodeAccess": True,
-        },
-        "lastError": None,
-        "lastErrorAt": None,
-        "backoffLevel": 0,
-    }
+            "expiresAt": expires_at,
+            "expiresIn": expires_in,
+            "scope": scope,
+            "testStatus": "active",
+            "providerSpecificData": {
+                "authMethod": "device_code",
+                "email": email,
+                "userId": principal_id or None,
+                "principalId": principal_id or None,
+                "deviceId": principal_id or str(uuidlib.uuid4()),
+                "idToken": id_token or None,
+                "hasGrokCodeAccess": True,
+            },
+            "lastError": None,
+            "lastErrorAt": None,
+            "backoffLevel": 0,
+        }
 
-    with sqlite3.connect(str(db_path), timeout=30) as connection:
-        connection.execute("PRAGMA busy_timeout=30000")
-        connection.execute("BEGIN IMMEDIATE")
-        existing = connection.execute(
-            "SELECT id, priority, createdAt FROM providerConnections "
-            "WHERE provider IN ('grok-cli', 'xai') AND email = ? LIMIT 1",
-            (email,),
-        ).fetchone()
-        if existing:
-            connection.execute(
-                "UPDATE providerConnections SET provider='grok-cli', authType='oauth', "
-                "name=?, email=?, isActive=1, data=?, updatedAt=? WHERE id=?",
-                (
-                    email,
-                    email,
-                    json.dumps(data, separators=(",", ":")),
-                    now,
-                    existing[0],
-                ),
-            )
-            connection_id = existing[0]
-            action = "updated"
-        else:
-            priority = connection.execute(
-                "SELECT COALESCE(MAX(priority), 0) + 1 FROM providerConnections "
-                "WHERE provider = 'grok-cli'"
-            ).fetchone()[0]
-            connection_id = str(uuidlib.uuid4())
-            connection.execute(
-                "INSERT INTO providerConnections "
-                "(id, provider, authType, name, email, priority, isActive, data, createdAt, updatedAt) "
-                "VALUES (?, 'grok-cli', 'oauth', ?, ?, ?, 1, ?, ?, ?)",
-                (
-                    connection_id,
-                    email,
-                    email,
-                    priority,
-                    json.dumps(data, separators=(",", ":")),
-                    now,
-                    now,
-                ),
-            )
-            action = "created"
-        connection.commit()
+        with sqlite3.connect(str(db_path), timeout=30) as connection:
+            connection.execute("PRAGMA busy_timeout=30000")
+            connection.execute("BEGIN IMMEDIATE")
+            existing = connection.execute(
+                "SELECT id, priority, createdAt FROM providerConnections "
+                "WHERE provider IN ('grok-cli', 'xai') AND email = ? LIMIT 1",
+                (email,),
+            ).fetchone()
+            if existing:
+                connection.execute(
+                    "UPDATE providerConnections SET provider='grok-cli', authType='oauth', "
+                    "name=?, email=?, isActive=1, data=?, updatedAt=? WHERE id=?",
+                    (
+                        email,
+                        email,
+                        json.dumps(data, separators=(",", ":")),
+                        now,
+                        existing[0],
+                    ),
+                )
+                connection_id = existing[0]
+                action = "updated"
+            else:
+                priority = connection.execute(
+                    "SELECT COALESCE(MAX(priority), 0) + 1 FROM providerConnections "
+                    "WHERE provider = 'grok-cli'"
+                ).fetchone()[0]
+                connection_id = str(uuidlib.uuid4())
+                connection.execute(
+                    "INSERT INTO providerConnections "
+                    "(id, provider, authType, name, email, priority, isActive, data, createdAt, updatedAt) "
+                    "VALUES (?, 'grok-cli', 'oauth', ?, ?, ?, 1, ?, ?, ?)",
+                    (
+                        connection_id,
+                        email,
+                        email,
+                        priority,
+                        json.dumps(data, separators=(",", ":")),
+                        now,
+                        now,
+                    ),
+                )
+                action = "created"
+            connection.commit()
 
     log(f"[9router] Grok CLI connection {action}: {email}")
     return {
