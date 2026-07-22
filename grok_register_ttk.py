@@ -31,7 +31,8 @@ from grok_core import (
     _set_worker_id,
     _track_cpa_async_thread,
     _join_threads_interruptible,
-    _io_lock
+    _io_lock,
+    _PROJECT_DIR,
 )
 
 # Lazy tkinter — allow CLI mode on systems without tk
@@ -260,6 +261,37 @@ def tk_option_menu(parent, variable, values, width=12):
         bd=1,
     )
     return menu
+
+
+def create_browser_options(log_callback: Callable[[str], None] | None = None) -> Any:
+    from DrissionPage import ChromiumOptions
+    log = log_callback or (lambda m: None)
+    opts = ChromiumOptions()
+    opts.auto_port()
+    opts.set_timeouts(base=2)
+    for flag in (
+        "--disable-gpu",
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+        "--mute-audio",
+        "--no-first-run",
+        "--disable-background-networking",
+        "--window-size=1280,900",
+    ):
+        opts.set_argument(flag)
+    ext_dir = str(_PROJECT_DIR / "turnstilePatch")
+    if os.path.isdir(ext_dir):
+        try:
+            opts.add_extension(ext_dir)
+        except Exception:
+            pass
+    proxy_val = (config.get("proxy") or "").strip()
+    if proxy_val:
+        try:
+            opts.set_argument(f"--proxy-server={proxy_val}")
+        except Exception:
+            pass
+    return opts
 
 
 def _sidebar_stat_row(parent, icon_text, label, value_var=None, value_text="", value_color=THEME_SIDEBAR_TEXT):
@@ -841,16 +873,15 @@ class GrokRegisterGUI:
                         self.update_stats()
                     if self.should_stop():
                         break
-                        # Konsisten dengan versi stabil/single worker: restart penuh setiap akun, menghindari sisa sesi SSO/TOS masuk ke tos-gate
-                        if _get_browser() is None:
-                            start_browser(log_callback=log_fn)
-                        else:
-                            if restart_every > 0 and local_attempts % restart_every == 0:
-                                log_fn(
-                                    f"[*] Worker-{worker_id} Telah memproses {local_attempts} akun, merestart browser secara berkala"
-                                )
-                            restart_browser(log_callback=log_fn)
-                        sleep_with_cancel(1, self.should_stop)
+                    if _get_browser() is None:
+                        start_browser(log_callback=log_fn)
+                    else:
+                        if restart_every > 0 and local_attempts % restart_every == 0:
+                            log_fn(
+                                f"[*] Worker-{worker_id} Telah memproses {local_attempts} akun, merestart browser secara berkala"
+                            )
+                        restart_browser(log_callback=log_fn)
+                    sleep_with_cancel(1, self.should_stop)
         finally:
             stop_browser()
 
@@ -1010,11 +1041,11 @@ class GrokRegisterGUI:
                 self.update_stats()
             if self.should_stop():
                 break
-                if _get_browser() is None:
-                    start_browser(log_callback=self.log)
-                else:
-                    restart_browser(log_callback=self.log)
-                sleep_with_cancel(1, self.should_stop)
+            if _get_browser() is None:
+                start_browser(log_callback=self.log)
+            else:
+                restart_browser(log_callback=self.log)
+            sleep_with_cancel(1, self.should_stop)
         stop_browser()
 
 
