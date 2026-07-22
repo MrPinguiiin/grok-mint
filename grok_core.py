@@ -227,6 +227,11 @@ def _create_chromium_options(log_callback: Callable[[str], None] | None = None) 
             opts.set_argument(f"--proxy-server={proxy_val}")
         except Exception:
             pass
+    if bool(config.get("headless", False)):
+        try:
+            opts.headless(True)
+        except Exception:
+            opts.set_argument("--headless=new")
     return opts
 
 def start_browser(log_callback: Callable[[str], None] | None = None) -> Any:

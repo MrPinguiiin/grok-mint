@@ -291,6 +291,11 @@ def create_browser_options(log_callback: Callable[[str], None] | None = None) ->
             opts.set_argument(f"--proxy-server={proxy_val}")
         except Exception:
             pass
+    if bool(config.get("headless", False)):
+        try:
+            opts.headless(True)
+        except Exception:
+            opts.set_argument("--headless=new")
     return opts
 
 
@@ -603,6 +608,39 @@ class GrokRegisterGUI:
         self.nsfw_check = tk_checkbutton(card2, text="Aktifkan NSFW setelah pendaftaran", variable=self.nsfw_var, bg=THEME_CARD_BG)
         add_c2_field(self.nsfw_check, 7)
 
+        add_c2_label(8, "Tampilan Browser")
+        self.headless_var = tk.BooleanVar(value=bool(config.get("headless", False)))
+        self.headless_check = tk_checkbutton(
+            card2,
+            text="Jalankan tanpa tampilan browser (headless)",
+            variable=self.headless_var,
+            bg=THEME_CARD_BG,
+        )
+        add_c2_field(self.headless_check, 8)
+
+        add_c2_label(9, "Worker Paralel")
+        self.concurrent_var = tk.StringVar(value=str(config.get("concurrent_count", 1)))
+        self.concurrent_spinbox = tk.Spinbox(
+            card2,
+            from_=1,
+            to=10,
+            width=10,
+            textvariable=self.concurrent_var,
+            bg=THEME_INPUT_BG,
+            fg=THEME_TEXT_PRIMARY,
+            insertbackground=THEME_TEXT_PRIMARY,
+            buttonbackground=THEME_CARD_HEADER,
+            disabledbackground=THEME_CARD_HEADER,
+            disabledforeground=THEME_TEXT_MUTED,
+            relief=tk.FLAT,
+            bd=0,
+            highlightthickness=1,
+            highlightbackground=THEME_BORDER,
+            highlightcolor=THEME_BORDER_ACTIVE,
+            font=FONT_UI,
+        )
+        add_c2_field(self.concurrent_spinbox, 9)
+
         # Terminal log card
         log_card = tk.Frame(main_area, bg=THEME_CARD_BG, highlightthickness=1, highlightbackground=THEME_BORDER, bd=0)
         log_card.pack(fill=tk.BOTH, expand=True)
@@ -718,6 +756,12 @@ class GrokRegisterGUI:
         config["grok2api_auto_add_remote"] = bool(self.grok2api_remote_auto_var.get())
         config["grok2api_remote_base"] = self.grok2api_remote_base_var.get().strip()
         config["grok2api_remote_app_key"] = self.grok2api_remote_key_var.get().strip()
+        config["headless"] = bool(self.headless_var.get())
+        try:
+            concurrent_count = int(self.concurrent_var.get())
+        except Exception:
+            concurrent_count = 1
+        config["concurrent_count"] = max(1, concurrent_count)
         raw_paths = [x.strip() for x in self.cloudflare_paths_var.get().split(",") if x.strip()]
         if len(raw_paths) >= 4:
             config["cloudflare_path_domains"] = raw_paths[0] if raw_paths[0].startswith("/") else ("/" + raw_paths[0])
@@ -773,7 +817,9 @@ class GrokRegisterGUI:
         )
         try:
             concurrent = max(1, int(config.get("concurrent_count", 1) or 1))
+            headless_mode = bool(config.get("headless", False))
             self.log(f"[*] Level log: {get_log_level()} | Interval statistik kecepatan: {int(interval)}s")
+            self.log(f"[*] Mode browser: {'headless (tanpa tampilan)' if headless_mode else 'headed (dengan tampilan)'} | Worker paralel: {concurrent}")
             if concurrent <= 1:
                 self._run_single_worker(count, worker_id=0)
             else:
