@@ -1528,7 +1528,7 @@ def export_cpa_xai_for_account(
                 result["nine_router"] = imported
             except Exception as exc:
                 result["nine_router"] = {"ok": False, "error": str(exc)}
-                log(f"[9router] auto-import failed: {type(exc).__name__}")
+                log(f"[9router] auto-import failed: {exc}")
         return result
     except Exception as e:
         log(f"[cpa] export failed: {type(e).__name__}")
@@ -1543,12 +1543,14 @@ def _jwt_payload(token: str) -> dict[str, Any]:
         return {}
 
 _9router_lock = threading.Lock()
+_9router_session_backed_up = False
 
 def import_cpa_to_9router(
     credential_path: str | os.PathLike[str],
     log_callback: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     """Upsert a CPA xAI OAuth credential into the local 9Router database."""
+    global _9router_session_backed_up
     log = log_callback or (lambda m: None)
     path = Path(credential_path).expanduser().resolve()
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -1570,16 +1572,22 @@ def import_cpa_to_9router(
         if not db_path.is_file():
             raise RuntimeError(f"9Router database not found: {db_path}")
 
-        backup_dir = db_path.parent / "backups" / "grok-mint"
-        backup_dir.mkdir(parents=True, exist_ok=True)
-        os.chmod(backup_dir, 0o700)
-        backup_path = backup_dir / f"data-{time.strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(4)}.sqlite"
-        fd = os.open(backup_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        os.close(fd)
-        with sqlite3.connect(str(db_path), timeout=30) as source:
-            with sqlite3.connect(str(backup_path)) as destination:
-                source.backup(destination)
-        os.chmod(backup_path, 0o600)
+        if not _9router_session_backed_up:
+            backup_dir = db_path.parent / "backups" / "grok-mint"
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            os.chmod(backup_dir, 0o700)
+            backup_path = backup_dir / "latest.sqlite"
+            fd = os.open(backup_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            os.close(fd)
+            try:
+                with sqlite3.connect(str(db_path), timeout=30) as source:
+                    with sqlite3.connect(str(backup_path)) as destination:
+                        source.backup(destination)
+                os.chmod(backup_path, 0o600)
+                log("[9router] backup created")
+                _9router_session_backed_up = True
+            except Exception as backup_err:
+                log(f"[9router] backup skipped: {backup_err}")
 
         now = datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
         access_claims = _jwt_payload(access_token)
