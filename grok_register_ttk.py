@@ -919,7 +919,7 @@ class GrokRegisterGUI:
                     finally:
                         local_attempts += 1
                         self.update_stats()
-                    if self.should_stop():
+                    if self.should_stop() or (slot_done and task_queue.empty()):
                         break
                     if _get_browser() is None:
                         start_browser(log_callback=log_fn)
@@ -1087,7 +1087,7 @@ class GrokRegisterGUI:
                 self.log(f"[-] Pendaftaran Gagal: {exc}")
             finally:
                 self.update_stats()
-            if self.should_stop():
+            if self.should_stop() or i >= count:
                 break
             if _get_browser() is None:
                 start_browser(log_callback=self.log)

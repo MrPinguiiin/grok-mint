@@ -648,64 +648,89 @@ def _wapol_create() -> tuple[str, str]:
     if browser is None:
         raise RuntimeError("wapol: browser not started")
 
-    page = browser.new_tab(
-        "https://wapol.site/mailbox",
-        background=True,
-    )
-    _wait_page_ready(page, timeout=30)
-    time.sleep(3)
-
-    username = _generate_username(12)
     domain = (config.get("wapol_domain") or "wapol.site").strip()
-
-    # Open the custom-address form instead of using the random default inbox.
-    opened = page.run_js(
-        """
-        const e = Array.from(document.querySelectorAll('div,button,a'))
-          .find((x) => String(x.innerText || '').trim() === 'New');
-        if (e) { e.click(); return true; }
-        return false;
-        """
-    )
-    if not opened:
-        raise RuntimeError("wapol: New button not found")
-    time.sleep(1)
-
-    user_input = page.ele("css:#user", timeout=3)
-    domain_input = page.ele("css:#domain", timeout=3)
-    create_button = page.ele("css:#create", timeout=3)
-    if not user_input or not domain_input or not create_button:
-        raise RuntimeError("wapol: custom mailbox form not found")
-
-    user_input.clear()
-    user_input.input(username)
-    domain_input.click(by_js=True)
-    domain_link = page.ele(
-        f"xpath://a[normalize-space(.)='{domain}']",
-        timeout=3,
-    )
-    if not domain_link:
-        raise RuntimeError(f"wapol: domain {domain} is unavailable")
-    domain_link.click(by_js=True)
-    create_button.click(by_js=True)
-
-    expected = f"{username}@{domain}"
-    deadline = time.time() + 20
-    address = ""
-    while time.time() < deadline:
-        email_el = page.ele("css:#email_id", timeout=1)
-        address = _norm(email_el.text if email_el else "")
-        if address == expected:
-            break
-        time.sleep(0.5)
-    if address != expected:
-        raise RuntimeError(
-            f"wapol: mailbox creation failed (expected {expected}, got {address or 'empty'})"
-        )
-
-    token = secrets.token_urlsafe(18)
-    _wapol_mailboxes()[token] = page
-    return address, token
+    last_error = ""
+    for attempt in range(1, 4):
+        page = browser.new_tab("https://wapol.site/mailbox", background=True)
+        try:
+            _wait_page_ready(page, timeout=30)
+            time.sleep(3)
+            username = _generate_username(12)
+            expected = f"{username}@{domain}"
+            opened = page.run_js(
+                """
+                const nodes = Array.from(document.querySelectorAll('button,a,[role="button"],div'));
+                const target = nodes.find((el) => String(el.innerText || el.textContent || '').trim() === 'New');
+                if (!target) return false;
+                target.click();
+                return true;
+                """
+            )
+            if not opened:
+                raise RuntimeError("New button not found")
+            user_input = page.ele("css:#user", timeout=5)
+            domain_input = page.ele("css:#domain", timeout=5)
+            if not user_input or not domain_input:
+                raise RuntimeError("custom mailbox form not found")
+            user_input.click()
+            user_input.input(username, clear=True)
+            page.run_js(
+                """
+                const el = document.querySelector('#user');
+                if (!el) return false;
+                const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+                setter.call(el, arguments[0]);
+                el.dispatchEvent(new InputEvent('input', {bubbles:true, inputType:'insertText', data:arguments[0]}));
+                el.dispatchEvent(new Event('change', {bubbles:true}));
+                el.dispatchEvent(new FocusEvent('blur', {bubbles:true}));
+                return el.value;
+                """,
+                username,
+            )
+            domain_input.click()
+            domain_link = page.ele(
+                f"xpath://a[normalize-space(.)='{domain}']",
+                timeout=5,
+            )
+            if not domain_link:
+                raise RuntimeError(f"domain {domain} is unavailable")
+            domain_link.click()
+            deadline = time.time() + 8
+            while time.time() < deadline:
+                current_user = str(getattr(page.ele("css:#user", timeout=0.5), "value", "") or "").strip()
+                current_domain = str(getattr(page.ele("css:#domain", timeout=0.5), "value", "") or "").strip()
+                domain_text = _norm(getattr(page.ele("css:#domain", timeout=0.5), "text", "") or "")
+                if current_user == username and domain in (current_domain or domain_text):
+                    break
+                time.sleep(0.4)
+            else:
+                raise RuntimeError("custom mailbox form state was not retained")
+            create_button = page.ele("css:#create", timeout=3)
+            if not create_button:
+                raise RuntimeError("Create button not found")
+            create_button.click()
+            deadline = time.time() + 20
+            address = ""
+            while time.time() < deadline:
+                email_el = page.ele("css:#email_id", timeout=1)
+                address = _norm(email_el.text if email_el else "")
+                if address == expected:
+                    token = secrets.token_urlsafe(18)
+                    _wapol_mailboxes()[token] = page
+                    return address, token
+                time.sleep(0.5)
+            raise RuntimeError(
+                f"mailbox creation mismatch (expected {expected}, got {address or 'empty'})"
+            )
+        except Exception as exc:
+            last_error = str(exc)
+            try:
+                page.close()
+            except Exception:
+                pass
+            if attempt < 3:
+                time.sleep(1)
+    raise RuntimeError(f"wapol: mailbox creation failed after 3 attempts: {last_error}")
 
 def _wapol_wait_code(
     token: str,
