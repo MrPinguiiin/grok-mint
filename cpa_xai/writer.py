@@ -20,6 +20,7 @@ def write_cpa_xai_auth(
     """Write payload to auth_dir/xai-<email>.json atomically. Returns final path."""
     auth_dir = Path(auth_dir).expanduser().resolve()
     auth_dir.mkdir(parents=True, exist_ok=True)
+    os.chmod(auth_dir, 0o700)
 
     if not filename:
         filename = credential_file_name(

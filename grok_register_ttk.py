@@ -33,6 +33,7 @@ from grok_core import (
     _join_threads_interruptible,
     _io_lock,
     _PROJECT_DIR,
+    _append_sensitive,
 )
 
 # Lazy tkinter — allow CLI mode on systems without tk
@@ -531,7 +532,7 @@ class GrokRegisterGUI:
         add_c1_field(self.api_key_entry, 4)
 
         add_c1_label(5, "Mode Autentikasi CF")
-        self.cloudflare_auth_mode_var = tk.StringVar(value=config.get("cloudflare_auth_mode", "none"))
+        self.cloudflare_auth_mode_var = tk.StringVar(value=config.get("cloudflare_auth_mode", "bearer"))
         self.cloudflare_auth_mode_combo = tk_option_menu(
             card1, self.cloudflare_auth_mode_var, ["query-key", "bearer", "x-api-key", "x-admin-auth", "none"], width=18
         )
@@ -774,6 +775,13 @@ class GrokRegisterGUI:
         if config["email_provider"] == "cloudflare" and not config["cloudflare_api_base"]:
             self.log("[!] Mode Cloudflare memerlukan pengisian Cloudflare API Base terlebih dahulu")
             return
+        if (
+            config["email_provider"] == "cloudflare"
+            and config["cloudflare_auth_mode"] != "none"
+            and not config["cloudflare_api_key"]
+        ):
+            self.log("[!] Mode Cloudflare memerlukan pengisian Cloudflare API Key terlebih dahulu")
+            return
         try:
             count = int(self.count_var.get())
         except Exception:
@@ -827,7 +835,7 @@ class GrokRegisterGUI:
             else:
                 self._run_concurrent_workers(count, concurrent)
         except Exception as exc:
-            self.log(f"[!] Pengecualian tugas: {exc}")
+            self.log(f"[!] Pengecualian tugas: {type(exc).__name__}")
         finally:
             stop_speed.set()
             try:
@@ -878,7 +886,7 @@ class GrokRegisterGUI:
             start_browser(log_callback=log_fn)
             log_fn(f"[*] Worker-{worker_id} Browser telah dimulai")
         except Exception as e:
-            log_fn(f"[!] Worker-{worker_id} Gagal meluncurkan browser: {e}")
+            log_fn(f"[!] Worker-{worker_id} Gagal meluncurkan browser: {type(e).__name__}")
             return
         restart_every = int(config.get("browser_restart_every", 10) or 0)
         local_success = 0
@@ -903,18 +911,18 @@ class GrokRegisterGUI:
                         retry_count_for_slot += 1
                         if retry_count_for_slot <= max_slot_retry:
                             log_fn(
-                                f"[!] Alur akun macet, mencoba kembali ke-{retry_count_for_slot}/{max_slot_retry}: {exc}"
+                                f"[!] Alur akun macet, mencoba kembali ke-{retry_count_for_slot}/{max_slot_retry}: {type(exc).__name__}"
                             )
                             restart_browser(log_callback=log_fn)
                             continue
                         with _stats_lock:
                             self.fail_count += 1
-                        log_fn(f"[-] Akun saat ini telah mencapai batas maksimal percobaan, lewati: {exc}")
+                        log_fn(f"[-] Akun saat ini telah mencapai batas maksimal percobaan, lewati: {type(exc).__name__}")
                         slot_done = True
                     except Exception as exc:
                         with _stats_lock:
                             self.fail_count += 1
-                        log_fn(f"[-] Pendaftaran Gagal: {exc}")
+                        log_fn(f"[-] Pendaftaran Gagal: {type(exc).__name__}")
                         slot_done = True
                     finally:
                         local_attempts += 1
@@ -949,11 +957,10 @@ class GrokRegisterGUI:
             log_fn(f"[*] Email: {email}")
             try:
                 with _io_lock:
-                    with open(
+                    _append_sensitive(
                         os.path.join(os.path.dirname(__file__), "mail_credentials.txt"),
-                        "a", encoding="utf-8",
-                    ) as f:
-                        f.write(f"{email}\t{dev_token}\n")
+                        f"{email}\t{dev_token}\n",
+                    )
             except Exception:
                 pass
             log_fn("[*] 3. Menarik kode verifikasi")
@@ -974,7 +981,7 @@ class GrokRegisterGUI:
                 raise
         if not mail_ok:
             raise Exception("Tahap verifikasi Gagal, telah mencapai batas maksimal percobaan")
-        log_fn(f"[*] Kode verifikasi: {code}")
+        log_fn("[*] Kode verifikasi diterima")
         log_fn("[*] 4. Mengisi data")
         profile = fill_profile_and_submit(
             log_callback=log_fn, cancel_callback=self.should_stop
@@ -1028,8 +1035,7 @@ class GrokRegisterGUI:
         try:
             line = f"{email}----{profile.get('password','')}----{sso}\n"
             with _io_lock:
-                with open(self.accounts_output_file, "a", encoding="utf-8") as f:
-                    f.write(line)
+                _append_sensitive(self.accounts_output_file, line)
         except Exception as file_exc:
             log_fn(f"[Debug] Gagal menyimpan file akun: {file_exc}")
         add_token_to_grok2api_pools(sso, email=email, log_callback=log_fn)
@@ -1072,11 +1078,11 @@ class GrokRegisterGUI:
             except AccountRetryNeeded as exc:
                 retry_count_for_slot += 1
                 if retry_count_for_slot <= max_slot_retry:
-                    self.log(f"[!] Alur akun saat ini macet, mencoba kembali ke-{retry_count_for_slot}/{max_slot_retry}: {exc}")
+                    self.log(f"[!] Alur akun saat ini macet, mencoba kembali ke-{retry_count_for_slot}/{max_slot_retry}: {type(exc).__name__}")
                 else:
                     with _stats_lock:
                         self.fail_count += 1
-                    self.log(f"[-] Akun saat ini telah mencapai batas maksimal percobaan, lewati: {exc}")
+                    self.log(f"[-] Akun saat ini telah mencapai batas maksimal percobaan, lewati: {type(exc).__name__}")
                     retry_count_for_slot = 0
                     i += 1
             except Exception as exc:
@@ -1084,7 +1090,7 @@ class GrokRegisterGUI:
                     self.fail_count += 1
                 retry_count_for_slot = 0
                 i += 1
-                self.log(f"[-] Pendaftaran Gagal: {exc}")
+                self.log(f"[-] Pendaftaran Gagal: {type(exc).__name__}")
             finally:
                 self.update_stats()
             if self.should_stop() or i >= count:

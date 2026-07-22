@@ -49,7 +49,7 @@ def probe_models(
         return {
             "ok": False,
             "status": e.code,
-            "error": e.read().decode("utf-8", errors="replace")[:500],
+            "error": "models probe HTTP error",
             "model_ids": [],
             "has_grok_45": False,
         }
@@ -111,7 +111,7 @@ def probe_mini_response(
         return {
             "ok": False,
             "status": e.code,
-            "error": e.read().decode("utf-8", errors="replace")[:800],
+            "error": "chat probe HTTP error",
         }
     except Exception as e:  # noqa: BLE001
         return {"ok": False, "status": 0, "error": str(e)}

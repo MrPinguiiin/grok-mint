@@ -88,7 +88,7 @@ def export_cpa_xai_for_account(
     try:
         from cpa_xai import mint_and_export  # type: ignore
     except Exception as e:  # noqa: BLE001
-        log(f"[cpa] import cpa_xai failed: {e}")
+        log(f"[cpa] import cpa_xai failed: {type(e).__name__}")
         return {"ok": False, "error": f"import: {e}"}
 
     out_dir = Path(cfg.get("cpa_auth_dir") or _DEFAULT_OUT).expanduser()
@@ -192,14 +192,17 @@ def export_cpa_xai_for_account(
     if result.get("ok") and result.get("path") and cfg.get("cpa_copy_to_hotload", False) and cpa_dir:
         try:
             cpa_dir.mkdir(parents=True, exist_ok=True)
+            os.chmod(cpa_dir, 0o700)
             src = Path(result["path"])
             dst = cpa_dir / src.name
+            fd = os.open(dst, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            os.close(fd)
             shutil.copy2(src, dst)
             os.chmod(dst, 0o600)
             result["cpa_path"] = str(dst)
             log(f"[cpa] hotload copy -> {dst}")
         except Exception as e:  # noqa: BLE001
-            log(f"[cpa] hotload copy failed: {e}")
+            log(f"[cpa] hotload copy failed: {type(e).__name__}")
             result["cpa_copy_error"] = str(e)
 
     if result.get("ok") and result.get("path") and cfg.get("cpa_server_host"):
@@ -207,14 +210,16 @@ def export_cpa_xai_for_account(
             from grok_register_ttk import upload_to_cpa_server
             upload_to_cpa_server(result["path"], log_callback=log)
         except Exception as e:  # noqa: BLE001
-            log(f"[cpa] server upload failed: {e}")
+            log(f"[cpa] server upload failed: {type(e).__name__}")
             result["upload_error"] = str(e)
 
     # failure log under register dir
     if not result.get("ok"):
         fail_path = out_dir / "cpa_auth_failed.txt"
-        with open(fail_path, "a", encoding="utf-8") as f:
-            f.write(f"{email}----{result.get('error') or 'unknown'}----{int(time.time())}\n")
+        fd = os.open(fail_path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "a", encoding="utf-8") as f:
+            f.write(f"{email}----CPA mint failed----{int(time.time())}\n")
         if cfg.get("cpa_mint_required", False):
             raise RuntimeError(f"CPA mint required but failed: {result.get('error')}")
 

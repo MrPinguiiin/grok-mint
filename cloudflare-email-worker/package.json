@@ -1,0 +1,11 @@
+{
+  "name": "temp-mail-grok-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npx --yes wrangler@latest dev",
+    "deploy": "npx --yes wrangler@latest deploy",
+    "db:migrate:local": "npx --yes wrangler@latest d1 migrations apply DB --local",
+    "db:migrate:remote": "npx --yes wrangler@latest d1 migrations apply DB --remote"
+  }
+}

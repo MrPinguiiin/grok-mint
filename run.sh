@@ -24,6 +24,7 @@ if [ ! -f "$DIR/config.json" ]; then
     if [ -f "$DIR/config.example.json" ]; then
         echo "[run] Membuat config.json dari template..."
         cp "$DIR/config.example.json" "$DIR/config.json"
+        chmod 600 "$DIR/config.json"
     fi
 fi
 

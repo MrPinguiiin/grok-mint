@@ -68,8 +68,8 @@ def mint_and_export(
             cancel=cancel,
         )
     except Exception as e:  # noqa: BLE001
-        log(f"mint failed: {e}")
-        return {"ok": False, "email": email, "error": str(e)}
+        log(f"mint failed: {type(e).__name__}")
+        return {"ok": False, "email": email, "error": "mint failed"}
 
     payload = build_cpa_xai_auth(
         email=email,
@@ -95,7 +95,7 @@ def mint_and_export(
     if probe:
         pr = probe_models(tokens["access_token"], base_url=base_url, proxy=resolved or None)
         result["probe_models"] = pr
-        log(f"probe models: ok={pr.get('ok')} has_grok_45={pr.get('has_grok_45')} ids={pr.get('model_ids')}")
+        log(f"probe models: ok={pr.get('ok')} has_grok_45={pr.get('has_grok_45')}")
         if not pr.get("has_grok_45"):
             result["ok"] = False
             result["error"] = "token ok but grok-4.5 not listed"
@@ -104,7 +104,7 @@ def mint_and_export(
                 tokens["access_token"], base_url=base_url, proxy=resolved or None
             )
             result["probe_chat"] = ch
-            log(f"probe chat: ok={ch.get('ok')} model={ch.get('model')} text={ch.get('text')!r}")
+            log(f"probe chat: ok={ch.get('ok')}")
             if not ch.get("ok"):
                 result["ok"] = False
                 result["error"] = f"chat probe failed: {ch.get('error') or ch.get('status')}"

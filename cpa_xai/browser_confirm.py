@@ -55,6 +55,7 @@ def _project_root() -> Path:
 def _debug_shot_dir() -> Path:
     d = _project_root() / "screenshots"
     d.mkdir(parents=True, exist_ok=True)
+    os.chmod(d, 0o700)
     return d
 
 
@@ -82,6 +83,8 @@ def _save_debug_shot(
         ts = time.strftime("%Y%m%d-%H%M%S")
         name = f"{ts}_{_safe_tag(email)}_{_safe_tag(tag)}.png"
         path = _debug_shot_dir() / name
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        os.close(fd)
         # DrissionPage: page.get_screenshot(path=...) or .screenshot
         saved = None
         for kwargs in (
@@ -115,18 +118,19 @@ def _save_debug_shot(
                 pass
             log(f"screenshot failed tag={tag}")
             return None
+        os.chmod(saved, 0o600)
         # also dump short text/url alongside
         try:
             meta = path.with_suffix(".txt")
-            url = _page_url(page)
-            vis = _norm(_visible_text(page))[:800]
-            meta.write_text(f"url={url}\nemail={email}\ntag={tag}\nvisible={vis}\n", encoding="utf-8")
+            fd = os.open(meta, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(f"email={email}\ntag={tag}\n")
         except Exception:
             pass
         log(f"debug shot saved: {saved}")
         return str(saved)
     except Exception as e:  # noqa: BLE001
-        log(f"screenshot error: {e}")
+        log(f"screenshot error: {type(e).__name__}")
         return None
 
 
@@ -180,10 +184,10 @@ def create_standalone_page(
                     opts.auto_port()
                 log("using register create_browser_options (turnstilePatch) with auto_port")
             except Exception as e:  # noqa: BLE001
-                log(f"register browser options unavailable: {e}")
+                log(f"register browser options unavailable: {type(e).__name__}")
                 opts = None
     except Exception as e:  # noqa: BLE001
-        log(f"register options probe failed: {e}")
+        log(f"register options probe failed: {type(e).__name__}")
         opts = None
 
     if opts is None:
@@ -206,7 +210,7 @@ def create_standalone_page(
                 opts.add_extension(ext)
                 log(f"added extension {ext}")
             except Exception as e:  # noqa: BLE001
-                log(f"extension add failed: {e}")
+                log(f"extension add failed: {type(e).__name__}")
 
     if headless:
         try:
@@ -252,7 +256,7 @@ def create_standalone_page(
             log("standalone chromium started")
             return browser, page
         except Exception as e:
-            log(f"chromium start attempt {_attempt+1}/3 failed: {e}")
+            log(f"chromium start attempt {_attempt+1}/3 failed: {type(e).__name__}")
             if _attempt < 2:
                 _sleep(3.0)
     raise BrowserConfirmError("chromium failed to start after 3 attempts")
@@ -314,7 +318,7 @@ def clear_page_session(page: Any, browser: Any | None = None, log: LogFn | None 
                 except Exception:
                     pass
     except Exception as e:
-        log(f"clear_page_session: {e}")
+        log(f"clear_page_session: {type(e).__name__}")
 
 
 def normalize_cookies(cookies: Any) -> list[dict[str, Any]]:
@@ -407,7 +411,7 @@ def inject_cookies(page: Any, cookies: Any, log: LogFn | None = None) -> int:
             log(f"injected cookies bulk via {target_name}={n}")
             break
         except Exception as e:
-            log(f"bulk set via {target_name} failed: {e}")
+            log(f"bulk set via {target_name} failed: {type(e).__name__}")
 
     if n == 0:
         for item in items:
@@ -449,7 +453,7 @@ def inject_cookies(page: Any, cookies: Any, log: LogFn | None = None) -> int:
                 )
             log(f"js cookie fallback applied={len(js_items)}")
     except Exception as e:
-        log(f"js cookie fallback: {e}")
+        log(f"js cookie fallback: {type(e).__name__}")
 
     return n
 
@@ -677,7 +681,7 @@ return '';
             _sleep(0.8)
             return True
     except Exception as e:
-        log(f"cookie banner JS dismiss failed: {e}")
+        log(f"cookie banner JS dismiss failed: {type(e).__name__}")
 
     # last resort: 全部拒绝 also clears the overlay
     hit = _click_exact(page, ["全部拒绝", "Reject all", "Reject All", "Decline", "Semua Ditolak", "Tolak Semua"], log, real=False)
@@ -714,7 +718,7 @@ def _click_exact(
                 log(f"clicked JS exact {label!r}")
             return label
         except Exception as e:
-            log(f"click {label!r} failed: {e}")
+            log(f"click {label!r} failed: {type(e).__name__}")
             if real:
                 try:
                     el.click(by_js=True)
@@ -862,10 +866,10 @@ def _fill(page: Any, selector: str, value: str, log: LogFn, label: str = "") -> 
             log(f"filled {label}")
             return True
         except Exception as e:
-            log(f"fill {label} failed: {e}")
+            log(f"fill {label} failed: {type(e).__name__}")
             return False
     except Exception as e:
-        log(f"fill {label} failed: {e}")
+        log(f"fill {label} failed: {type(e).__name__}")
         return False
 
 
@@ -949,7 +953,7 @@ def approve_device_code(
         except Exception:
             user_code = ""
 
-    log(f"open device url: {verification_uri_complete}")
+    log("open device verification page")
     try:
         page.get(verification_uri_complete, timeout=60)
     except TypeError:
@@ -969,11 +973,8 @@ def approve_device_code(
         url = _page_url(page)
         text = _visible_text(page)
         if url != last_url:
-            log(f"url: {url[:180]}")
+            log("authentication page changed")
             last_url = url
-            snip = _norm(text)[:160]
-            if snip:
-                log(f"visible: {snip}")
 
         # Non-retryable auth / CF block — skip account immediately (no timeout wait)
         auth_err = _detect_auth_error(text, url)
@@ -1051,7 +1052,7 @@ def approve_device_code(
                 log("consent form submit via JS fallback")
                 _sleep(2.5)
             except Exception as e:
-                log(f"consent fallback failed: {e}")
+                log(f"consent fallback failed: {type(e).__name__}")
             continue
 
         # Device code entry
@@ -1145,7 +1146,7 @@ def approve_device_code(
                         el.click()
                         log("clicked login submit real")
                 except Exception as e:
-                    log(f"login submit fail: {e}")
+                    log(f"login submit fail: {type(e).__name__}")
             # wait navigation / surface error banner
             for _ in range(20):
                 if stop_event is not None and stop_event.is_set():
@@ -1242,12 +1243,12 @@ def mint_with_browser(
                 break
             except BaseException as e:  # noqa: BLE001
                 last_err = e
-                log(f"request_device_code attempt {attempt}/3 failed: {e}")
+                log(f"request_device_code attempt {attempt}/3 failed: {type(e).__name__}")
                 _sleep(1.5 * attempt)
         if sess is None:
             raise last_err or RuntimeError("request_device_code failed")
         log(
-            f"device user_code={sess.user_code} expires_in={sess.expires_in} "
+            f"device code received expires_in={sess.expires_in} "
             f"proxy={proxy_log_label(resolved) or '(none)'}"
         )
 
@@ -1270,12 +1271,9 @@ def mint_with_browser(
             try:
                 work_page.get("https://accounts.x.ai/")
                 _sleep(1.0)
-                url = _page_url(work_page)
-                text = _visible_text(work_page)
-                snip = _norm(text)[:120]
-                log(f"post-inject session url={url[:120]} visible={snip}")
+                log("post-inject session check completed")
             except Exception as e:
-                log(f"post-inject check: {e}")
+                log(f"post-inject check failed: {type(e).__name__}")
 
         stop_event = threading.Event()
         token_box: dict[str, Any] = {}
@@ -1329,10 +1327,10 @@ def mint_with_browser(
                 or "browser confirm timeout" in low
             )
             if hard:
-                log(f"browser confirm abort: {e}")
+                log(f"browser confirm abort: {type(e).__name__}")
                 stop_event.set()
                 raise
-            log(f"browser confirm warning: {e}")
+            log(f"browser confirm warning: {type(e).__name__}")
 
         t.join(timeout=max(browser_timeout_sec, 60) + 30)
         if "token" in token_box:

@@ -6,6 +6,7 @@ grok_core.pyd
 .venv/
 venv/
 env/
+node_modules/
 
 accounts_*.txt
 mail_credentials.txt

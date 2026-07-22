@@ -99,11 +99,11 @@ def create_address(
     resp.raise_for_status()
     data, raw = json_or_text(resp)
     if not data:
-        raise RuntimeError(f"{path} bukan JSON: {raw}")
+        raise RuntimeError(f"{path} bukan respons JSON")
     address = str(data.get("address", "")).strip()
     jwt = str(data.get("jwt", "")).strip()
     if not address or not jwt:
-        raise RuntimeError(f"{path} kekurangan address/jwt: {data}")
+        raise RuntimeError(f"{path} kekurangan address/jwt")
     return address, jwt
 
 
@@ -205,7 +205,7 @@ def main():
             name=args.name,
         )
         print(f"[NEW] address={address}")
-        print(f"[NEW] credential(jwt)={credential}")
+        print("[NEW] mailbox credential received (value omitted)")
     else:
         print(f"[USE] address={address or '(unknown, from credential)'}")
 
@@ -226,9 +226,9 @@ def main():
                 detail = get_detail(args.api_base, credential, mail_id)
                 subj, text = flatten_mail_text(m, detail)
                 code = extract_code(text, subj)
-                print(f"[MAIL] id={mail_id} subject={subj!r} code={code!r}")
+                print(f"[MAIL] id={mail_id} code_found={bool(code)}")
                 if code:
-                    print(f"[FOUND] {code}")
+                    print("[FOUND] verification code received (value omitted)")
                     return
         if total == 0:
             print("[INFO] no mails yet")

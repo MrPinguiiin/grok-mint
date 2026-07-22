@@ -88,6 +88,18 @@ Provider bawaan adalah Wapol:
 
 Provider lain yang tersedia: `duckmail`, `mailtm`, dan `cloudflare`. Domain email sementara dapat ditolak oleh x.ai sewaktu-waktu; domain Wapol telah diuji pada implementasi ini.
 
+Untuk memakai Worker pada `cloudflare-email-worker` dari GUI, pilih provider
+`cloudflare`, lalu isi:
+
+- `Mode Autentikasi CF`: `bearer`
+- `Cloudflare API Base`: URL Worker tanpa garis miring terakhir, misalnya `https://temp-mail-grok.example.workers.dev`
+- `Cloudflare API Key`: nilai `API_TOKEN` yang dibuat saat deployment Worker
+- `Jalur CF`: biarkan nilai bawaan, termasuk `/api/new_address` dan `/api/mails`
+
+Worker membuat alamat acak, menyaring inbox berdasarkan alamat penerima, lalu
+GUI mengambil dan mengisi kode verifikasi secara otomatis. Token API inbox ini
+berbeda dari `CLOUDFLARE_API_TOKEN` yang dipakai Wrangler untuk deployment.
+
 ## Integrasi 9Router
 
 Grok Mint mendeteksi dan menggunakan database instalasi 9Router lokal. Contoh konfigurasi:

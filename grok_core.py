@@ -109,12 +109,36 @@ def load_config() -> dict[str, Any]:
 def save_config() -> None:
     path = _CONFIG_PATH
     try:
-        path.write_text(
+        _write_sensitive(
+            path,
             json.dumps(_GLOBAL_CONFIG_CACHE, indent=2, ensure_ascii=False),
-            encoding="utf-8",
         )
     except Exception:
         pass
+
+def _append_sensitive(path: str | os.PathLike[str], text: str) -> None:
+    target = os.path.expanduser(os.fspath(path))
+    fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "a", encoding="utf-8") as f:
+            fd = -1
+            f.write(text)
+    finally:
+        if fd >= 0:
+            os.close(fd)
+
+def _write_sensitive(path: str | os.PathLike[str], text: str) -> None:
+    target = os.path.expanduser(os.fspath(path))
+    fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            fd = -1
+            f.write(text)
+    finally:
+        if fd >= 0:
+            os.close(fd)
 
 config: dict[str, Any] = _GLOBAL_CONFIG_CACHE
 
@@ -255,7 +279,7 @@ def start_browser(log_callback: Callable[[str], None] | None = None) -> Any:
             log("[browser] chromium started")
             return browser, page
         except Exception as e:
-            log(f"[browser] start attempt {attempt+1}/3 failed: {e}")
+            log(f"[browser] start attempt {attempt+1}/3 failed: {type(e).__name__}")
             if attempt < 2:
                 time.sleep(2)
     raise RuntimeError("browser failed to start after 3 attempts")
@@ -461,10 +485,18 @@ def _duckmail_wait_code(
     raise RuntimeError("duckmail: no verification code received")
 
 # ── Cloudflare Temp Mail ─────────────────────────────────
+def _cf_normalize_api_base(api_base: str) -> str:
+    base = (api_base or "").strip().rstrip("/")
+    if not base:
+        return base
+    if not re.match(r"^[a-zA-Z][a-zA-Z0-9+.\-]*://", base):
+        base = f"https://{base}"
+    return base
+
 def _cf_create() -> tuple[str, str]:
     import requests
     cfg = config
-    api_base = (cfg.get("cloudflare_api_base") or "").strip().rstrip("/")
+    api_base = _cf_normalize_api_base(cfg.get("cloudflare_api_base") or "")
     if not api_base:
         raise RuntimeError("cloudflare_api_base not configured")
     auth_mode = cfg.get("cloudflare_auth_mode", "none")
@@ -488,30 +520,42 @@ def _cf_create() -> tuple[str, str]:
     resp.raise_for_status()
     data, raw = _json_or_text(resp)
     if not data:
-        raise RuntimeError(f"cf: not JSON {raw}")
+        raise RuntimeError("cf: API returned a non-JSON response")
     addr = str(data.get("address", "")).strip()
     jwt = str(data.get("jwt", "")).strip()
-    if not addr or not jwt:
-        raise RuntimeError(f"cf: missing address/jwt: {data}")
-    return addr, jwt
+    if not addr:
+        raise RuntimeError("cf: API response is missing an address")
+    # The bundled Email Worker uses one API token and the recipient address as
+    # mailbox context. Other supported APIs may still return a mailbox JWT.
+    return addr, jwt or addr
 
 def _cf_wait_code(
-    jwt: str,
+    mailbox_credential: str,
     timeout: float = 180,
     interval: float = 3,
 ) -> str:
     import requests
     cfg = config
-    api_base = (cfg.get("cloudflare_api_base") or "").strip().rstrip("/")
+    api_base = _cf_normalize_api_base(cfg.get("cloudflare_api_base") or "")
     mail_path = cfg.get("cloudflare_path_messages", "/api/mails")
+    is_worker_mailbox = "@" in mailbox_credential
+    if is_worker_mailbox:
+        headers = _build_auth_headers(
+            cfg.get("cloudflare_auth_mode", "bearer"),
+            cfg.get("cloudflare_api_key", ""),
+        )
+        params = {"recipient": mailbox_credential, "limit": 20}
+    else:
+        headers = {"Authorization": f"Bearer {mailbox_credential}"}
+        params = {"limit": 20, "offset": 0}
     deadline = time.time() + timeout
     seen = set()
     while time.time() < deadline:
         try:
             resp = requests.get(
                 f"{api_base}{mail_path}",
-                params={"limit": 20, "offset": 0},
-                headers={"Authorization": f"Bearer {jwt}"},
+                params=params,
+                headers=headers,
                 timeout=20,
             )
             if resp.status_code < 400:
@@ -534,13 +578,22 @@ def _cf_wait_code(
                         try:
                             detail = requests.get(
                                 f"{api_base}/api/mail/{mid}",
-                                headers={"Authorization": f"Bearer {jwt}"},
+                                headers=headers,
                                 timeout=20,
                             )
                             if detail.status_code < 400:
                                 dd, _ = _json_or_text(detail)
                                 if isinstance(dd, dict):
-                                    body = str(dd.get("text") or dd.get("body") or dd.get("content") or body)
+                                    message = dd.get("message")
+                                    if isinstance(message, dict):
+                                        dd = message
+                                    body = str(
+                                        dd.get("text")
+                                        or dd.get("raw")
+                                        or dd.get("body")
+                                        or dd.get("content")
+                                        or body
+                                    )
                                     subj = subj or str(dd.get("subject") or "")
                         except Exception:
                             pass
@@ -565,9 +618,10 @@ def _mailtm_create() -> tuple[str, str]:
         raise RuntimeError("mailtm: no domains available")
     domain = domains[0]
     addr = f"{_generate_username()}@{domain}"
+    password = secrets.token_urlsafe(18)
     resp2 = requests.post(
         "https://api.mail.tm/accounts",
-        json={"address": addr, "password": "TempPass123!"},
+        json={"address": addr, "password": password},
         timeout=20,
     )
     resp2.raise_for_status()
@@ -577,7 +631,7 @@ def _mailtm_create() -> tuple[str, str]:
     addr = str(data2.get("address", addr))
     resp3 = requests.post(
         "https://api.mail.tm/token",
-        json={"address": addr, "password": "TempPass123!"},
+        json={"address": addr, "password": password},
         timeout=20,
     )
     resp3.raise_for_status()
@@ -872,7 +926,7 @@ def _click_exact(page: Any, labels: list[str], log: Callable, *, real: bool = Fa
             log(f"clicked {label!r}")
             return label
         except Exception as e:
-            log(f"click {label!r} failed: {e}")
+            log(f"click {label!r} failed: {type(e).__name__}")
     return None
 
 def _fill(page: Any, selector: str, value: str, log: Callable, label: str = "") -> bool:
@@ -948,7 +1002,7 @@ def _fill_react_input(
         log(f"filled {label}")
         return True
     except Exception as exc:
-        log(f"fill {label} failed: {exc}")
+        log(f"fill {label} failed: {type(exc).__name__}")
         return False
 
 def _detect_rejected_domain(page: Any) -> str | None:
@@ -1205,7 +1259,7 @@ def fill_code_and_submit(
         raise RegistrationCancelled()
     log("[code] waiting for verification email...")
     code = _wait_verification_code(dev_token)
-    log(f"[code] got code: {code}")
+    log("[code] verification code received")
     input_code = re.sub(r"[^A-Za-z0-9]", "", code)
     _dismiss_cookie_banner(page, log)
     if not _fill_react_input(
@@ -1367,7 +1421,7 @@ def enable_nsfw_for_token(
         log(f"[nsfw] API returned {resp.status_code}")
         return True, "continuing (NSFW API non-critical)"
     except Exception as e:
-        log(f"[nsfw] error: {e}")
+        log(f"[nsfw] error: {type(e).__name__}")
         return True, "continuing (NSFW non-critical)"
 
 # ── Token management ─────────────────────────────────────
@@ -1395,11 +1449,10 @@ def add_token_to_grok2api_pools(
         tokens.append(entry)
         if token_file:
             try:
-                with open(token_file, "w") as f:
-                    json.dump(tokens, f, indent=2)
+                _write_sensitive(token_file, json.dumps(tokens, indent=2))
                 log(f"[pool] added to local token file: {token_file}")
             except Exception as e:
-                log(f"[pool] failed to write local token: {e}")
+                log(f"[pool] failed to write local token: {type(e).__name__}")
     # Remote pool
     if cfg.get("grok2api_auto_add_remote", False):
         remote_base = cfg.get("grok2api_remote_base", "").strip()
@@ -1417,7 +1470,7 @@ def add_token_to_grok2api_pools(
                 else:
                     log(f"[pool] remote add returned {resp.status_code}")
             except Exception as e:
-                log(f"[pool] remote add error: {e}")
+                log(f"[pool] remote add error: {type(e).__name__}")
 
 def add_token_to_token_only_file(
     sso: str,
@@ -1427,19 +1480,17 @@ def add_token_to_token_only_file(
     # Always append to tokens.txt
     try:
         with _io_lock:
-            with open(_TOKENS_FILE, "a") as f:
-                f.write(f"{sso}\n")
+            _append_sensitive(_TOKENS_FILE, f"{sso}\n")
     except Exception as e:
-        log(f"[token] failed to write tokens.txt: {e}")
+        log(f"[token] failed to write tokens.txt: {type(e).__name__}")
     # Also write to custom file if configured
     token_only = config.get("token_only_file", "").strip()
     if token_only:
         try:
             with _io_lock:
-                with open(token_only, "a") as f:
-                    f.write(f"{sso}\n")
+                _append_sensitive(token_only, f"{sso}\n")
         except Exception as e:
-            log(f"[token] failed to write {token_only}: {e}")
+            log(f"[token] failed to write custom file: {type(e).__name__}")
 
 def reset_9router_connections_status(
     log_callback: Callable[[str], None] | None = None,
@@ -1477,11 +1528,11 @@ def export_cpa_xai_for_account(
                 result["nine_router"] = imported
             except Exception as exc:
                 result["nine_router"] = {"ok": False, "error": str(exc)}
-                log(f"[9router] auto-import failed: {exc}")
+                log(f"[9router] auto-import failed: {type(exc).__name__}")
         return result
     except Exception as e:
-        log(f"[cpa] export failed: {e}")
-        return {"ok": False, "error": str(e)}
+        log(f"[cpa] export failed: {type(e).__name__}")
+        return {"ok": False, "error": "CPA export failed"}
 
 def _jwt_payload(token: str) -> dict[str, Any]:
     try:
@@ -1518,10 +1569,14 @@ def import_cpa_to_9router(
 
     backup_dir = db_path.parent / "backups" / "grok-mint"
     backup_dir.mkdir(parents=True, exist_ok=True)
+    os.chmod(backup_dir, 0o700)
     backup_path = backup_dir / f"data-{time.strftime('%Y%m%d-%H%M%S')}.sqlite"
+    fd = os.open(backup_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    os.close(fd)
     with sqlite3.connect(str(db_path), timeout=30) as source:
         with sqlite3.connect(str(backup_path)) as destination:
             source.backup(destination)
+    os.chmod(backup_path, 0o600)
 
     now = datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
     access_claims = _jwt_payload(access_token)
@@ -1688,7 +1743,7 @@ def _cli_run() -> None:
         else:
             _cli_concurrent_workers(app, count, concurrent)
     except Exception as exc:
-        app.log(f"[!] Error: {exc}")
+        app.log(f"[!] Error: {type(exc).__name__}")
     finally:
         stop_speed.set()
         try:
@@ -1719,12 +1774,12 @@ def _cli_single_worker(app, count, worker_id=0):
             app.log("[!] Dibatalkan")
             break
         except AccountRetryNeeded as e:
-            app.log(f"[!] Retry needed: {e}")
+            app.log(f"[!] Retry needed: {type(e).__name__}")
         except Exception as e:
             with _stats_lock:
                 app.fail_count += 1
             i += 1
-            app.log(f"[-] Gagal: {e}")
+            app.log(f"[-] Gagal: {type(e).__name__}")
         finally:
             app.update_stats()
         if (i > 0 and i % int(config.get("browser_restart_every", 10) or 0) == 0):
@@ -1792,7 +1847,7 @@ def _cli_register_one(app, log_fn, worker_id, local_success):
         email, dev_token,
         log_callback=log_fn, cancel_callback=app.should_stop,
     )
-    log_fn(f"[*] Code: {code}")
+    log_fn("[*] Kode verifikasi diterima")
     log_fn("[*] 4. Mengisi profil")
     profile = fill_profile_and_submit(
         log_callback=log_fn, cancel_callback=app.should_stop
@@ -1815,8 +1870,7 @@ def _cli_register_one(app, log_fn, worker_id, local_success):
     try:
         line = f"{email}----{profile.get('password','')}----{sso}\n"
         with _io_lock:
-            with open(app.accounts_output_file, "a", encoding="utf-8") as f:
-                f.write(line)
+            _append_sensitive(app.accounts_output_file, line)
     except Exception as e:
         log_fn(f"[!] File write error: {e}")
     add_token_to_grok2api_pools(sso, email=email, log_callback=log_fn)

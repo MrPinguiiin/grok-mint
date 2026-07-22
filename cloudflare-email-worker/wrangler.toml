@@ -1,0 +1,12 @@
+name = "temp-mail-grok"
+main = "src/index.js"
+compatibility_date = "2026-07-22"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "temp-mail-grok-db"
+database_id = "2af547e9-6c40-4678-9554-c3fba42de3d0"
+migrations_dir = "migrations"
+
+[vars]
+MAIL_DOMAIN = "beanbill.me"

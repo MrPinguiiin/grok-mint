@@ -175,11 +175,11 @@ def request_device_code(
         retry_sleep=1.0,
     )
     if status != 200 or not isinstance(body, dict):
-        raise OAuthDeviceError(f"device code request failed HTTP {status}: {body!r}")
+        raise OAuthDeviceError(f"device code request failed HTTP {status}: response omitted")
     device_code = str(body.get("device_code") or "").strip()
     user_code = str(body.get("user_code") or "").strip()
     if not device_code or not user_code:
-        raise OAuthDeviceError(f"device code response missing fields: {body}")
+        raise OAuthDeviceError("device code response missing required fields")
     vuri = str(body.get("verification_uri") or "https://accounts.x.ai/oauth2/device").strip()
     vcomplete = str(
         body.get("verification_uri_complete") or f"{vuri}?user_code={user_code}"
@@ -243,12 +243,12 @@ def poll_device_token(
             net_streak += 1
             wait = min(sleep_for + min(net_streak, 5), 20)
             log(
-                f"oauth poll network blip ({net_streak}/{max_net_streak}): {e} "
-                f"— retry in {wait}s"
+                f"oauth poll network blip ({net_streak}/{max_net_streak}): "
+                f"{type(e).__name__}; retry in {wait}s"
             )
             if net_streak >= max_net_streak:
                 raise OAuthDeviceError(
-                    f"device auth aborted after {net_streak} network errors: {e}"
+                    f"device auth aborted after {net_streak} network errors"
                 ) from e
             time.sleep(wait)
             continue
@@ -280,20 +280,20 @@ def poll_device_token(
             time.sleep(actual_sleep)
             continue
         if err in ("expired_token", "access_denied"):
-            raise OAuthDeviceError(f"device auth failed: {err}: {desc}")
+            raise OAuthDeviceError(f"device auth failed: {err}")
         if status == 400 and err:
-            raise OAuthDeviceError(f"device auth token error: {err}: {desc or body}")
+            raise OAuthDeviceError(f"device auth token error: {err}")
         # 5xx / empty / proxy HTML — treat as soft error and keep polling
         if status >= 500 or status in (502, 503, 504) or not isinstance(body, dict):
             net_streak += 1
             wait = min(sleep_for + 2, 20)
-            log(f"oauth poll soft HTTP {status}: {body!r} — retry in {wait}s")
+            log(f"oauth poll soft HTTP {status}: response omitted; retry in {wait}s")
             if net_streak >= max_net_streak:
                 raise OAuthDeviceError(
                     f"device auth aborted after soft HTTP failures status={status}"
                 )
             time.sleep(wait)
             continue
-        log(f"oauth poll unexpected HTTP {status}: {body!r}")
+        log(f"oauth poll unexpected HTTP {status}: response omitted")
         time.sleep(sleep_for)
     raise OAuthDeviceError("device auth timed out waiting for user approval")
