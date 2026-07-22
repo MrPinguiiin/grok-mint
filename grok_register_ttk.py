@@ -619,11 +619,13 @@ class GrokRegisterGUI:
         add_c2_field(self.headless_check, 8)
 
         add_c2_label(9, "Worker Paralel")
-        self.concurrent_var = tk.StringVar(value=str(config.get("concurrent_count", 1)))
+        self.concurrent_var = tk.StringVar(
+            value=str(min(3, max(1, int(config.get("concurrent_count", 1) or 1))))
+        )
         self.concurrent_spinbox = tk.Spinbox(
             card2,
             from_=1,
-            to=10,
+            to=3,
             width=10,
             textvariable=self.concurrent_var,
             bg=THEME_INPUT_BG,
@@ -761,7 +763,7 @@ class GrokRegisterGUI:
             concurrent_count = int(self.concurrent_var.get())
         except Exception:
             concurrent_count = 1
-        config["concurrent_count"] = max(1, concurrent_count)
+        config["concurrent_count"] = min(3, max(1, concurrent_count))
         raw_paths = [x.strip() for x in self.cloudflare_paths_var.get().split(",") if x.strip()]
         if len(raw_paths) >= 4:
             config["cloudflare_path_domains"] = raw_paths[0] if raw_paths[0].startswith("/") else ("/" + raw_paths[0])
@@ -816,7 +818,7 @@ class GrokRegisterGUI:
             interval_sec=interval,
         )
         try:
-            concurrent = max(1, int(config.get("concurrent_count", 1) or 1))
+            concurrent = min(3, max(1, int(config.get("concurrent_count", 1) or 1)))
             headless_mode = bool(config.get("headless", False))
             self.log(f"[*] Level log: {get_log_level()} | Interval statistik kecepatan: {int(interval)}s")
             self.log(f"[*] Mode browser: {'headless (tanpa tampilan)' if headless_mode else 'headed (dengan tampilan)'} | Worker paralel: {concurrent}")

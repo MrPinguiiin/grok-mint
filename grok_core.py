@@ -1095,9 +1095,6 @@ def fill_email_and_submit(
     if cancel_callback and cancel_callback():
         raise RegistrationCancelled()
     _dismiss_cookie_banner(page, log)
-    addr, token = _create_email()
-    log(f"[email] created {addr}")
-    # Step 1: If on sign-in page with "Don't have an account? Sign up", click Sign up first
     if "sign-in" in _page_url(page) or "signin" in _page_url(page):
         for link_text in ["Sign up", "Daftar", "注册"]:
             try:
@@ -1109,37 +1106,65 @@ def fill_email_and_submit(
                     break
             except Exception:
                 continue
-    # Step 2: Choose email sign-up method
-    if not page.ele("css:input[type='email']", timeout=0.3):
-        if not _click_exact(page, [
+    if not page.ele("css:input[type='email']", timeout=0.5):
+        clicked = _click_exact(page, [
             "Sign up with email", "Login with email",
             "Continue with email", "Sign in with email",
             "使用邮箱登录", "Masuk dengan email",
-        ], log, real=False):
-            log("[email] email option button not found")
-    sleep_with_cancel(2, cancel_callback)
-    # Step 3: Fill email
-    _fill(page, "css:input[type='email']", addr, log, "email")
+        ], log, real=False)
+        if clicked:
+            sleep_with_cancel(2, cancel_callback)
+    email_input = page.ele("css:input[type='email']", timeout=2)
+    if email_input is None:
+        if bool(config.get("headless", False)):
+            config["headless"] = False
+            save_config()
+            log("[email] headless diblokir xAI, beralih otomatis ke browser tampil")
+            raise AccountRetryNeeded("headless tidak menampilkan formulir email; retry headed")
+        raise AccountRetryNeeded(
+            f"formulir email tidak tersedia, url={_page_url(page)} text={_norm(_visible_text(page))[:120]}"
+        )
+    addr, token = _create_email()
+    log(f"[email] created {addr}")
+    if not _fill(page, "css:input[type='email']", addr, log, "email"):
+        raise AccountRetryNeeded("gagal mengisi formulir email")
     sleep_with_cancel(1, cancel_callback)
     _wait_turnstile(page, log, 25, email=addr, raise_on_timeout=False)
-    # Step 4: Click Sign up / Next / Continue
-    if not _click_exact(page, ["Sign up", "下一步", "Next", "Continue", "继续", "Berikutnya", "Lanjutkan"], log, real=False):
+    submitted = bool(_click_exact(
+        page,
+        ["Sign up", "下一步", "Next", "Continue", "继续", "Berikutnya", "Lanjutkan"],
+        log,
+        real=False,
+    ))
+    if not submitted:
         try:
             btn = page.ele("css:button[type='submit']", timeout=0.5)
             if btn:
                 btn.click(by_js=True)
+                submitted = True
                 log("clicked email submit fallback")
         except Exception:
             pass
-    sleep_with_cancel(2, cancel_callback)
-    # Check for domain rejection
-    rejected = _detect_rejected_domain(page)
-    if rejected:
-        log(f"[!] x.ai menolak domain email: {rejected}")
-        log("[!] Ganti provider email di config.json atau gunakan domain lain")
-        raise RuntimeError(f"Email domain rejected by x.ai: {rejected}")
-    sleep_with_cancel(1, cancel_callback)
-    return addr, token
+    if not submitted:
+        raise AccountRetryNeeded("tombol submit email tidak ditemukan")
+    deadline = time.time() + 15
+    while time.time() < deadline:
+        if cancel_callback and cancel_callback():
+            raise RegistrationCancelled()
+        rejected = _detect_rejected_domain(page)
+        if rejected:
+            log(f"[!] x.ai menolak domain email: {rejected}")
+            raise RuntimeError(f"Email domain rejected by x.ai: {rejected}")
+        if page.ele("css:input[name='code']", timeout=0.2) or page.ele(
+            "css:input[autocomplete='one-time-code']", timeout=0.2
+        ):
+            return addr, token
+        if not page.ele("css:input[type='email']", timeout=0.2):
+            return addr, token
+        time.sleep(0.5)
+    raise AccountRetryNeeded(
+        f"halaman tidak berpindah setelah submit email, url={_page_url(page)}"
+    )
 
 def fill_code_and_submit(
     email: str,
@@ -1586,7 +1611,7 @@ def main_cli() -> None:
 def _cli_run() -> None:
     cfg = config
     count = int(cfg.get("register_count", 1))
-    concurrent = int(cfg.get("concurrent_count", 1))
+    concurrent = min(3, max(1, int(cfg.get("concurrent_count", 1) or 1)))
     print(f"[cli] target: {count} accounts, {concurrent} workers")
 
     from grok_register_ttk import (
