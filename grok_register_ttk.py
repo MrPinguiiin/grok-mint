@@ -93,26 +93,36 @@ except ImportError:
     scrolledtext = None
     _HAS_TK = False
 
-# Clean Light Theme Constants with Dark Sidebar
-THEME_BG = "#f1f5f9"
+# Automation Workspace theme (from Grok Mint GUI mock)
+THEME_BG = "#f7f9fb"
 THEME_CARD_BG = "#ffffff"
-THEME_TEXT_PRIMARY = "#0f172a"
-THEME_TEXT_MUTED = "#64748b"
-THEME_BORDER = "#cbd5e1"
-THEME_BORDER_ACTIVE = "#2563eb"
+THEME_CARD_HEADER = "#eceef0"
+THEME_TEXT_PRIMARY = "#191c1e"
+THEME_TEXT_MUTED = "#414751"
+THEME_BORDER = "#c1c7d3"
+THEME_BORDER_ACTIVE = "#005da7"
 THEME_INPUT_BG = "#ffffff"
-THEME_PRIMARY_BLUE = "#2563eb"
-THEME_PRIMARY_HOVER = "#1d4ed8"
-THEME_SIDEBAR_BG = "#0f172a"
-THEME_SIDEBAR_CARD = "#1e293b"
+THEME_PRIMARY = "#005da7"
+THEME_PRIMARY_HOVER = "#004883"
+THEME_PRIMARY_SOFT = "#a4c9ff"
+THEME_SIDEBAR_BG = "#141d23"
+THEME_SIDEBAR_CARD = "#2a3238"
 THEME_SIDEBAR_TEXT = "#ffffff"
-
-
+THEME_SIDEBAR_MUTED = "#c1c7d3"
+THEME_ERROR = "#ba1a1a"
+THEME_SUCCESS = "#34d399"
+THEME_TERMINAL_BG = "#1c2128"
+THEME_TERMINAL_FG = "#e6edf3"
+FONT_UI = ("Inter", 10)
+FONT_UI_SM = ("Inter", 9)
+FONT_HEAD = ("Hanken Grotesk", 18, "bold")
+FONT_HEAD_MD = ("Hanken Grotesk", 12, "bold")
+FONT_CAPS = ("Hanken Grotesk", 9, "bold")
+FONT_CODE = ("JetBrains Mono", 10)
 
 
 def setup_light_theme(root):
     try:
-        # Override Tk options for the whole application
         root.option_add("*Background", THEME_BG)
         root.option_add("*Foreground", THEME_TEXT_PRIMARY)
         root.option_add("*selectBackground", THEME_BORDER_ACTIVE)
@@ -131,15 +141,13 @@ def setup_light_theme(root):
             style.theme_use("default")
 
         root.configure(bg=THEME_BG)
-
-        # Configure TTK styles to match our theme
         style.configure(".", background=THEME_BG, foreground=THEME_TEXT_PRIMARY, fieldbackground=THEME_INPUT_BG)
         style.configure("TFrame", background=THEME_BG)
         style.configure("TLabelframe", background=THEME_BG, foreground=THEME_TEXT_PRIMARY)
         style.configure("TLabelframe.Label", background=THEME_BG, foreground=THEME_TEXT_PRIMARY)
         style.configure("TLabel", background=THEME_BG, foreground=THEME_TEXT_PRIMARY)
         style.configure("TCheckbutton", background=THEME_CARD_BG, foreground=THEME_TEXT_PRIMARY)
-        style.configure("TButton", background=THEME_PRIMARY_BLUE, foreground="#ffffff")
+        style.configure("TButton", background=THEME_PRIMARY, foreground="#ffffff")
         style.configure("TEntry", fieldbackground=THEME_INPUT_BG, foreground=THEME_TEXT_PRIMARY)
         style.configure("TCombobox", fieldbackground=THEME_INPUT_BG, foreground=THEME_TEXT_PRIMARY)
         style.configure("TSpinbox", fieldbackground=THEME_INPUT_BG, foreground=THEME_TEXT_PRIMARY)
@@ -148,13 +156,14 @@ def setup_light_theme(root):
 
 
 def tk_label(parent, text="", **kwargs):
-    font_val = kwargs.pop("font", ("Segoe UI", 10))
+    font_val = kwargs.pop("font", FONT_UI)
     bg_color = kwargs.pop("bg", THEME_CARD_BG)
     fg_color = kwargs.pop("fg", THEME_TEXT_PRIMARY)
     return tk.Label(parent, text=text, bg=bg_color, fg=fg_color, font=font_val, **kwargs)
 
 
 def tk_entry(parent, textvariable=None, width=30, **kwargs):
+    show = kwargs.pop("show", None)
     return tk.Entry(
         parent,
         textvariable=textvariable,
@@ -162,24 +171,27 @@ def tk_entry(parent, textvariable=None, width=30, **kwargs):
         bg=THEME_INPUT_BG,
         fg=THEME_TEXT_PRIMARY,
         insertbackground=THEME_TEXT_PRIMARY,
-        disabledbackground="#f1f5f9",
+        disabledbackground="#eceef0",
         disabledforeground=THEME_TEXT_MUTED,
         highlightthickness=1,
         highlightbackground=THEME_BORDER,
         highlightcolor=THEME_BORDER_ACTIVE,
         relief=tk.FLAT,
         bd=0,
-        font=("Segoe UI", 10),
+        font=FONT_UI,
+        show=show if show is not None else "",
         **kwargs,
     )
 
 
 def tk_button(parent, text="", command=None, state=tk.NORMAL, **kwargs):
-    bg_color = kwargs.pop("bg", THEME_PRIMARY_BLUE)
+    bg_color = kwargs.pop("bg", THEME_PRIMARY)
     fg_color = kwargs.pop("fg", "#ffffff")
     active_bg = kwargs.pop("activebackground", THEME_PRIMARY_HOVER)
     active_fg = kwargs.pop("activeforeground", "#ffffff")
-    font_val = kwargs.pop("font", ("Segoe UI Semibold", 10))
+    font_val = kwargs.pop("font", FONT_CAPS)
+    padx = kwargs.pop("padx", 14)
+    pady = kwargs.pop("pady", 8)
 
     return tk.Button(
         parent,
@@ -190,12 +202,13 @@ def tk_button(parent, text="", command=None, state=tk.NORMAL, **kwargs):
         fg=fg_color,
         activebackground=active_bg,
         activeforeground=active_fg,
-        disabledforeground="#cbd5e1",
+        disabledforeground="#94a3b8",
         relief=tk.FLAT,
         borderwidth=0,
-        padx=14,
-        pady=5,
+        padx=padx,
+        pady=pady,
         font=font_val,
+        cursor="hand2",
         **kwargs,
     )
 
@@ -212,9 +225,10 @@ def tk_checkbutton(parent, text="", variable=None, **kwargs):
         activebackground=bg_color,
         activeforeground=fg_color,
         selectcolor="#ffffff",
-        font=("Segoe UI", 10),
+        font=FONT_UI_SM,
         bd=0,
         relief=tk.FLAT,
+        highlightthickness=0,
         **kwargs,
     )
 
@@ -225,26 +239,42 @@ def tk_option_menu(parent, variable, values, width=12):
         width=width,
         bg=THEME_INPUT_BG,
         fg=THEME_TEXT_PRIMARY,
-        activebackground=THEME_BORDER,
+        activebackground="#e6e8ea",
         activeforeground=THEME_TEXT_PRIMARY,
         highlightthickness=1,
         highlightbackground=THEME_BORDER,
         highlightcolor=THEME_BORDER_ACTIVE,
         relief=tk.FLAT,
         bd=0,
-        font=("Segoe UI", 10),
-        direction="below"
+        font=FONT_UI,
+        direction="below",
+        cursor="hand2",
     )
     menu["menu"].configure(
         bg=THEME_INPUT_BG,
         fg=THEME_TEXT_PRIMARY,
-        activebackground=THEME_BORDER,
-        activeforeground=THEME_TEXT_PRIMARY,
-        font=("Segoe UI", 10),
+        activebackground=THEME_PRIMARY,
+        activeforeground="#ffffff",
+        font=FONT_UI,
         relief=tk.FLAT,
-        bd=1
+        bd=1,
     )
     return menu
+
+
+def _sidebar_stat_row(parent, icon_text, label, value_var=None, value_text="", value_color=THEME_SIDEBAR_TEXT):
+    row = tk.Frame(parent, bg=THEME_SIDEBAR_CARD, padx=10, pady=8, highlightthickness=1, highlightbackground="#3a434b", bd=0)
+    row.pack(fill=tk.X, pady=4)
+    left = tk.Frame(row, bg=THEME_SIDEBAR_CARD)
+    left.pack(side=tk.LEFT, fill=tk.X, expand=True)
+    tk.Label(left, text=icon_text, bg=THEME_SIDEBAR_CARD, fg=THEME_SIDEBAR_MUTED, font=FONT_UI_SM).pack(side=tk.LEFT, padx=(0, 8))
+    tk.Label(left, text=label, bg=THEME_SIDEBAR_CARD, fg=THEME_SIDEBAR_MUTED, font=FONT_UI_SM).pack(side=tk.LEFT)
+    if value_var is not None:
+        lbl = tk.Label(row, textvariable=value_var, bg=THEME_SIDEBAR_CARD, fg=value_color, font=FONT_HEAD_MD)
+    else:
+        lbl = tk.Label(row, text=value_text, bg=THEME_SIDEBAR_CARD, fg=value_color, font=FONT_HEAD_MD)
+    lbl.pack(side=tk.RIGHT)
+    return lbl
 
 
 class GrokRegisterGUI:
@@ -278,426 +308,209 @@ class GrokRegisterGUI:
         # Check license on start
         ok, info = check_activated_license()
         if ok:
-            self.root.geometry("1120x900")
-            self.root.minsize(960, 700)
+            self.root.geometry("1280x900")
+            self.root.minsize(1100, 760)
             self.setup_ui()
         else:
-            self.root.geometry("520x300")
+            self.root.geometry("520x320")
             self.root.resizable(False, False)
             self.setup_activation_ui()
 
     def setup_activation_ui(self):
-        self.root.configure(bg="#f1f5f9")
-
-        # Clear existing widgets
+        self.root.configure(bg=THEME_BG)
         for widget in self.root.winfo_children():
             widget.destroy()
-
-        title_font = ("Segoe UI Semibold", 12)
-        label_font = ("Segoe UI", 10)
 
         tk.Label(
             self.root,
             text="Aktivasi Lisensi Grok Mint",
-            font=title_font,
-            bg="#f1f5f9",
-            fg="#0f172a"
-        ).pack(pady=(20, 10))
+            font=FONT_HEAD_MD,
+            bg=THEME_BG,
+            fg=THEME_TEXT_PRIMARY,
+        ).pack(pady=(24, 10))
 
         hwid = get_hwid()
         tk.Label(
             self.root,
             text=f"Silakan hubungi @MrPinguiiin untuk lisensi Anda.\nHardware ID Perangkat Anda: {hwid}",
-            font=label_font,
-            bg="#f1f5f9",
-            fg="#64748b",
-            justify=tk.CENTER
+            font=FONT_UI,
+            bg=THEME_BG,
+            fg=THEME_TEXT_MUTED,
+            justify=tk.CENTER,
         ).pack(pady=(0, 15))
 
-        entry_frame = tk.Frame(self.root, bg="#f1f5f9")
+        entry_frame = tk.Frame(self.root, bg=THEME_BG)
         entry_frame.pack(fill=tk.X, padx=40, pady=5)
-
-        tk.Label(entry_frame, text="Kunci Lisensi:", font=label_font, bg="#f1f5f9", fg="#334155").pack(anchor=tk.W)
+        tk.Label(entry_frame, text="Kunci Lisensi:", font=FONT_CAPS, bg=THEME_BG, fg=THEME_TEXT_MUTED).pack(anchor=tk.W)
         self.key_var = tk.StringVar()
         entry = tk_entry(entry_frame, textvariable=self.key_var, width=44)
         entry.pack(fill=tk.X, pady=(4, 10))
         entry.focus_set()
 
-        self.msg_label = tk.Label(self.root, text="", font=("Segoe UI", 9), bg="#f1f5f9", fg="#ef4444")
+        self.msg_label = tk.Label(self.root, text="", font=FONT_UI_SM, bg=THEME_BG, fg=THEME_ERROR)
         self.msg_label.pack()
 
         def do_activate():
             key = self.key_var.get().strip()
             if not key:
-                self.msg_label.config(text="Silakan masukkan kunci lisensi!", fg="#ef4444")
+                self.msg_label.config(text="Silakan masukkan kunci lisensi!", fg=THEME_ERROR)
                 return
-
             success, msg = verify_and_activate_license(key)
             if success:
                 messagebox.showinfo("Aktivasi Sukses", "Lisensi berhasil diaktivasi!")
-                # Reset to normal UI
                 for widget in self.root.winfo_children():
                     widget.destroy()
-                self.root.geometry("1120x900")
+                self.root.geometry("1280x900")
                 self.root.resizable(True, True)
-                self.root.minsize(960, 700)
+                self.root.minsize(1100, 760)
                 self.setup_ui()
             else:
-                self.msg_label.config(text=f"Gagal: {msg}", fg="#ef4444")
+                self.msg_label.config(text=f"Gagal: {msg}", fg=THEME_ERROR)
 
-        btn_frame = tk.Frame(self.root, bg="#f1f5f9")
+        btn_frame = tk.Frame(self.root, bg=THEME_BG)
         btn_frame.pack(pady=(10, 20))
-
-        tk_button(btn_frame, text="Aktivasi", command=do_activate, bg="#2563eb", activebackground="#1d4ed8").pack(side=tk.LEFT, padx=5)
-        tk_button(btn_frame, text="Keluar", command=self.root.destroy, bg="#e2e8f0", fg="#0f172a", activebackground="#cbd5e1", activeforeground="#0f172a").pack(side=tk.RIGHT, padx=5)
+        tk_button(btn_frame, text="Aktivasi", command=do_activate).pack(side=tk.LEFT, padx=5)
+        tk_button(
+            btn_frame,
+            text="Keluar",
+            command=self.root.destroy,
+            bg="#e6e8ea",
+            fg=THEME_TEXT_PRIMARY,
+            activebackground="#d8dadc",
+            activeforeground=THEME_TEXT_PRIMARY,
+        ).pack(side=tk.RIGHT, padx=5)
 
     def setup_ui(self):
         load_config()
         self.root.configure(bg=THEME_BG)
+        for widget in self.root.winfo_children():
+            widget.destroy()
 
-        # 1. Left Sidebar
-        sidebar = tk.Frame(self.root, bg=THEME_SIDEBAR_BG, width=250, padx=16, pady=20)
+        # Sidebar
+        sidebar = tk.Frame(self.root, bg=THEME_SIDEBAR_BG, width=260)
         sidebar.pack(side=tk.LEFT, fill=tk.Y)
         sidebar.pack_propagate(False)
 
-        # Sidebar Header
-        logo_label = tk.Label(
-            sidebar,
-            text="GROK MINT",
-            font=("Segoe UI Semibold", 13),
-            fg="#ffffff",
-            bg=THEME_SIDEBAR_BG,
-        )
-        logo_label.pack(anchor=tk.W, pady=(0, 2))
+        side_pad = tk.Frame(sidebar, bg=THEME_SIDEBAR_BG, padx=18, pady=20)
+        side_pad.pack(fill=tk.BOTH, expand=True)
 
-        watermark_label = tk.Label(
-            sidebar,
-            text="by @MrPinguiiin",
-            font=("Segoe UI Italic", 9),
-            fg="#64748b",
-            bg=THEME_SIDEBAR_BG,
-        )
-        watermark_label.pack(anchor=tk.W, pady=(0, 24))
+        tk.Label(side_pad, text="GROK MINT", font=FONT_HEAD, fg=THEME_SIDEBAR_TEXT, bg=THEME_SIDEBAR_BG).pack(anchor=tk.W)
+        tk.Label(side_pad, text="by @MrPinguiiin", font=FONT_UI_SM, fg=THEME_SIDEBAR_MUTED, bg=THEME_SIDEBAR_BG).pack(anchor=tk.W, pady=(2, 20))
 
-        # Control Panel Buttons
-        control_header = tk.Label(
-            sidebar,
-            text="KONTROL PANEL",
-            font=("Segoe UI Semibold", 9),
-            fg="#475569",
-            bg=THEME_SIDEBAR_BG,
-        )
-        control_header.pack(anchor=tk.W, pady=(0, 8))
+        tk.Label(side_pad, text="KONTROL PANEL", font=FONT_CAPS, fg=THEME_SIDEBAR_MUTED, bg=THEME_SIDEBAR_BG).pack(anchor=tk.W, pady=(0, 8))
+        self.start_btn = tk_button(side_pad, text="▶  Mulai Registrasi", command=self.start_registration, bg=THEME_PRIMARY, activebackground=THEME_PRIMARY_HOVER)
+        self.start_btn.pack(fill=tk.X, pady=3)
+        self.stop_btn = tk_button(side_pad, text="■  Berhenti", command=self.stop_registration, state=tk.DISABLED, bg="#7f1d1d", activebackground=THEME_ERROR)
+        self.stop_btn.pack(fill=tk.X, pady=3)
+        self.clear_btn = tk_button(side_pad, text="⌫  Bersihkan Log", command=self.clear_log, bg="#2a3238", fg=THEME_SIDEBAR_TEXT, activebackground="#3a434b", activeforeground=THEME_SIDEBAR_TEXT)
+        self.clear_btn.pack(fill=tk.X, pady=(3, 20))
 
-        self.start_btn = tk_button(
-            sidebar,
-            text="Mulai Registrasi",
-            command=self.start_registration,
-            bg=THEME_PRIMARY_BLUE,
-            activebackground=THEME_PRIMARY_HOVER,
-        )
-        self.start_btn.pack(fill=tk.X, pady=4)
-
-        self.stop_btn = tk_button(
-            sidebar,
-            text="Berhenti",
-            command=self.stop_registration,
-            state=tk.DISABLED,
-            bg="#ef4444",
-            activebackground="#b91c1c",
-        )
-        self.stop_btn.pack(fill=tk.X, pady=4)
-
-        self.clear_btn = tk_button(
-            sidebar,
-            text="Bersihkan Log",
-            command=self.clear_log,
-            bg="#334155",
-            fg="#e2e8f0",
-            activebackground="#475569",
-            activeforeground="#e2e8f0",
-        )
-        self.clear_btn.pack(fill=tk.X, pady=(4, 28))
-
-        # Statistics & Status Section
-        stats_header = tk.Label(
-            sidebar,
-            text="STATISTIK SESI",
-            font=("Segoe UI Semibold", 9),
-            fg="#475569",
-            bg=THEME_SIDEBAR_BG,
-        )
-        stats_header.pack(anchor=tk.W, pady=(0, 8))
-
-        # Status Card
-        status_card = tk.Frame(
-            sidebar,
-            bg=THEME_SIDEBAR_CARD,
-            padx=12,
-            pady=10,
-            highlightthickness=1,
-            highlightbackground="#334155",
-            bd=0,
-        )
-        status_card.pack(fill=tk.X, pady=(0, 10))
-        tk.Label(
-            status_card,
-            text="STATUS SISTEM",
-            font=("Segoe UI Semibold", 8),
-            fg="#64748b",
-            bg=THEME_SIDEBAR_CARD,
-        ).pack(anchor=tk.W)
+        tk.Label(side_pad, text="STATISTIK SESI", font=FONT_CAPS, fg=THEME_SIDEBAR_MUTED, bg=THEME_SIDEBAR_BG).pack(anchor=tk.W, pady=(0, 6))
         self.status_var = tk.StringVar(value="SIAP")
-        self.status_label = tk.Label(
-            status_card,
-            textvariable=self.status_var,
-            font=("Segoe UI Semibold", 13),
-            fg="#22c55e",
-            bg=THEME_SIDEBAR_CARD,
-        )
-        self.status_label.pack(anchor=tk.W, pady=(2, 0))
-
-        # Success Card
-        success_card = tk.Frame(
-            sidebar,
-            bg=THEME_SIDEBAR_CARD,
-            padx=12,
-            pady=10,
-            highlightthickness=1,
-            highlightbackground="#334155",
-            bd=0,
-        )
-        success_card.pack(fill=tk.X, pady=(0, 10))
-        tk.Label(
-            success_card,
-            text="REGISTRASI SUKSES",
-            font=("Segoe UI Semibold", 8),
-            fg="#64748b",
-            bg=THEME_SIDEBAR_CARD,
-        ).pack(anchor=tk.W)
-        self.success_label = tk.Label(
-            success_card,
-            textvariable=self.success_count_var,
-            font=("Segoe UI Semibold", 16),
-            fg="#22c55e",
-            bg=THEME_SIDEBAR_CARD,
-        )
-        self.success_label.pack(anchor=tk.W, pady=(2, 0))
-
-        # Fail Card
-        fail_card = tk.Frame(
-            sidebar,
-            bg=THEME_SIDEBAR_CARD,
-            padx=12,
-            pady=10,
-            highlightthickness=1,
-            highlightbackground="#334155",
-            bd=0,
-        )
-        fail_card.pack(fill=tk.X, pady=(0, 10))
-        tk.Label(
-            fail_card,
-            text="REGISTRASI GAGAL",
-            font=("Segoe UI Semibold", 8),
-            fg="#64748b",
-            bg=THEME_SIDEBAR_CARD,
-        ).pack(anchor=tk.W)
-        self.fail_label = tk.Label(
-            fail_card,
-            textvariable=self.fail_count_var,
-            font=("Segoe UI Semibold", 16),
-            fg="#ef4444",
-            bg=THEME_SIDEBAR_CARD,
-        )
-        self.fail_label.pack(anchor=tk.W, pady=(2, 0))
-
-        # Success Rate Card
-        rate_card = tk.Frame(
-            sidebar,
-            bg=THEME_SIDEBAR_CARD,
-            padx=12,
-            pady=10,
-            highlightthickness=1,
-            highlightbackground="#334155",
-            bd=0,
-        )
-        rate_card.pack(fill=tk.X, pady=(0, 10))
-        tk.Label(
-            rate_card,
-            text="SUCCESS RATE",
-            font=("Segoe UI Semibold", 8),
-            fg="#64748b",
-            bg=THEME_SIDEBAR_CARD,
-        ).pack(anchor=tk.W)
-        self.rate_label = tk.Label(
-            rate_card,
-            textvariable=self.success_rate_var,
-            font=("Segoe UI Semibold", 16),
-            fg="#3b82f6",
-            bg=THEME_SIDEBAR_CARD,
-        )
-        self.rate_label.pack(anchor=tk.W, pady=(2, 0))
-
-        # Speed Card
-        speed_card = tk.Frame(
-            sidebar,
-            bg=THEME_SIDEBAR_CARD,
-            padx=12,
-            pady=10,
-            highlightthickness=1,
-            highlightbackground="#334155",
-            bd=0,
-        )
-        speed_card.pack(fill=tk.X, pady=(0, 10))
-        tk.Label(
-            speed_card,
-            text="KECEPATAN",
-            font=("Segoe UI Semibold", 8),
-            fg="#64748b",
-            bg=THEME_SIDEBAR_CARD,
-        ).pack(anchor=tk.W)
-        self.speed_label = tk.Label(
-            speed_card,
-            textvariable=self.speed_var,
-            font=("Segoe UI Semibold", 16),
-            fg="#a855f7",
-            bg=THEME_SIDEBAR_CARD,
-        )
-        self.speed_label.pack(anchor=tk.W, pady=(2, 0))
-
-        # License Card
-        license_card = tk.Frame(
-            sidebar,
-            bg=THEME_SIDEBAR_CARD,
-            padx=12,
-            pady=10,
-            highlightthickness=1,
-            highlightbackground="#334155",
-            bd=0,
-        )
-        license_card.pack(fill=tk.X, pady=(0, 10))
-        tk.Label(
-            license_card,
-            text="INFO LISENSI",
-            font=("Segoe UI Semibold", 8),
-            fg="#64748b",
-            bg=THEME_SIDEBAR_CARD,
-        ).pack(anchor=tk.W)
+        self.status_label = _sidebar_stat_row(side_pad, "◎", "Status Sistem", value_var=self.status_var, value_color=THEME_SUCCESS)
+        self.success_label = _sidebar_stat_row(side_pad, "✓", "Registrasi Sukses", value_var=self.success_count_var, value_color=THEME_PRIMARY_SOFT)
+        self.fail_label = _sidebar_stat_row(side_pad, "!", "Registrasi Gagal", value_var=self.fail_count_var, value_color=THEME_ERROR)
+        self.rate_label = _sidebar_stat_row(side_pad, "%", "Success Rate", value_var=self.success_rate_var, value_color=THEME_SIDEBAR_TEXT)
+        self.speed_label = _sidebar_stat_row(side_pad, "»", "Kecepatan", value_var=self.speed_var, value_color=THEME_SIDEBAR_TEXT)
 
         ok, info = check_activated_license()
         if ok and isinstance(info, dict):
-            import datetime
             key = info.get("key", "")
-            ltype = key.split("-")[0] if "-" in key else "UNKNOWN"
+            ltype = key.split("-")[0] if "-" in key else "LINUX"
             expires_at = info.get("expires_at", -1)
-            expiry_str = "Selamanya" if expires_at == -1 else datetime.datetime.fromtimestamp(expires_at).strftime('%Y-%m-%d')
+            expiry_str = "Selamanya" if expires_at == -1 else datetime.datetime.fromtimestamp(expires_at).strftime("%Y-%m-%d")
             license_text = f"{ltype} (Exp: {expiry_str})"
         else:
             license_text = "Tidak Aktif"
+        license_card = tk.Frame(side_pad, bg=THEME_SIDEBAR_CARD, padx=12, pady=10, highlightthickness=1, highlightbackground="#3a434b", bd=0)
+        license_card.pack(fill=tk.X, pady=(16, 0))
+        tk.Label(license_card, text="INFO LISENSI", font=FONT_CAPS, fg=THEME_SIDEBAR_MUTED, bg=THEME_SIDEBAR_CARD).pack(anchor=tk.W)
+        tk.Label(license_card, text=license_text, font=FONT_UI, fg=THEME_SIDEBAR_TEXT, bg=THEME_SIDEBAR_CARD).pack(anchor=tk.W, pady=(4, 0))
 
-        tk.Label(
-            license_card,
-            text=license_text,
-            font=("Segoe UI Semibold", 10),
-            fg="#e2e8f0",
-            bg=THEME_SIDEBAR_CARD,
-        ).pack(anchor=tk.W, pady=(2, 0))
+        # Main workspace
+        main_shell = tk.Frame(self.root, bg=THEME_BG)
+        main_shell.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
+        header = tk.Frame(main_shell, bg=THEME_BG, height=64, padx=24)
+        header.pack(fill=tk.X)
+        header.pack_propagate(False)
+        tk.Label(header, text="Automation Workspace", font=FONT_HEAD_MD, bg=THEME_BG, fg=THEME_TEXT_PRIMARY).pack(side=tk.LEFT, pady=18)
+        tk.Label(header, text="REAL-TIME MONITORING", font=FONT_CAPS, bg=THEME_BG, fg=THEME_TEXT_MUTED).pack(side=tk.RIGHT, pady=22)
 
-        # 2. Main Content Area
-        main_area = tk.Frame(self.root, bg=THEME_BG, padx=16, pady=16)
-        main_area.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+        main_area = tk.Frame(main_shell, bg=THEME_BG, padx=24, pady=8)
+        main_area.pack(fill=tk.BOTH, expand=True)
 
-        # Row of Two Configuration Cards
         cards_frame = tk.Frame(main_area, bg=THEME_BG)
-        cards_frame.pack(fill=tk.X, pady=(0, 12))
+        cards_frame.pack(fill=tk.X, pady=(0, 16))
 
-        # CARD 1: Email & Jaringan
-        card1 = tk.Frame(
-            cards_frame,
-            bg=THEME_CARD_BG,
-            highlightthickness=1,
-            highlightbackground=THEME_BORDER,
-            bd=0,
-            padx=16,
-            pady=16,
-        )
-        card1.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 6))
+        # CARD 1: Email & Network
+        card1 = tk.Frame(cards_frame, bg=THEME_CARD_BG, highlightthickness=1, highlightbackground=THEME_BORDER, bd=0, padx=18, pady=18)
+        card1.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
         card1.grid_columnconfigure(1, weight=1)
-
-        tk.Label(
-            card1,
-            text="Konfigurasi Email & Jaringan",
-            font=("Segoe UI Semibold", 11),
-            bg=THEME_CARD_BG,
-            fg=THEME_TEXT_PRIMARY,
-        ).grid(row=0, column=0, columnspan=2, sticky=tk.W, pady=(0, 12))
+        tk.Label(card1, text="✉  Konfigurasi Email & Jaringan", font=FONT_HEAD_MD, bg=THEME_CARD_BG, fg=THEME_TEXT_PRIMARY).grid(row=0, column=0, columnspan=2, sticky=tk.W, pady=(0, 14))
 
         def add_c1_label(row, text):
-            tk_label(card1, text=text, bg=THEME_CARD_BG, fg=THEME_TEXT_MUTED).grid(
-                row=row, column=0, sticky=tk.W, padx=(0, 10), pady=4
-            )
+            tk_label(card1, text=text, bg=THEME_CARD_BG, fg=THEME_TEXT_MUTED, font=FONT_CAPS).grid(row=row, column=0, sticky=tk.W, padx=(0, 12), pady=6)
 
         def add_c1_field(widget, row):
-            widget.grid(row=row, column=1, sticky=tk.EW, pady=4)
+            widget.grid(row=row, column=1, sticky=tk.EW, pady=6)
 
-        # C1 Fields
-        add_c1_label(1, "Penyedia Email:")
-        self.email_provider_var = tk.StringVar(value=config.get("email_provider", "mailtm"))
-        self.email_provider_combo = tk_option_menu(card1, self.email_provider_var, ["wapol", "duckmail", "yyds", "cloudflare", "mailtm"], width=12)
+        add_c1_label(1, "Penyedia Email")
+        self.email_provider_var = tk.StringVar(value=config.get("email_provider", "wapol"))
+        self.email_provider_combo = tk_option_menu(card1, self.email_provider_var, ["wapol", "duckmail", "yyds", "cloudflare", "mailtm"], width=18)
         add_c1_field(self.email_provider_combo, 1)
 
-        add_c1_label(2, "Jumlah Registrasi:")
+        add_c1_label(2, "Jumlah Registrasi")
         self.count_var = tk.StringVar(value=str(config.get("register_count", 1)))
         self.count_spinbox = tk.Spinbox(
             card1,
             from_=1,
             to=2500,
-            width=8,
+            width=10,
             textvariable=self.count_var,
             bg=THEME_INPUT_BG,
             fg=THEME_TEXT_PRIMARY,
             insertbackground=THEME_TEXT_PRIMARY,
-            buttonbackground="#f1f5f9",
-            disabledbackground="#f1f5f9",
+            buttonbackground=THEME_CARD_HEADER,
+            disabledbackground=THEME_CARD_HEADER,
             disabledforeground=THEME_TEXT_MUTED,
             relief=tk.FLAT,
             bd=0,
             highlightthickness=1,
             highlightbackground=THEME_BORDER,
             highlightcolor=THEME_BORDER_ACTIVE,
-            font=("Segoe UI", 10),
+            font=FONT_UI,
         )
         add_c1_field(self.count_spinbox, 2)
 
-        add_c1_label(3, "Proxy (Opsional):")
+        add_c1_label(3, "Proxy (Opsional)")
         self.proxy_var = tk.StringVar(value=config.get("proxy", ""))
-        self.proxy_entry = tk_entry(card1, textvariable=self.proxy_var, width=24)
+        self.proxy_entry = tk_entry(card1, textvariable=self.proxy_var, width=28)
         add_c1_field(self.proxy_entry, 3)
 
-        add_c1_label(4, "DuckMail API Key:")
+        add_c1_label(4, "DuckMail API Key")
         self.api_key_var = tk.StringVar(value=config.get("duckmail_api_key", ""))
-        self.api_key_entry = tk_entry(card1, textvariable=self.api_key_var, width=24)
+        self.api_key_entry = tk_entry(card1, textvariable=self.api_key_var, width=28, show="•")
         add_c1_field(self.api_key_entry, 4)
 
-        add_c1_label(5, "Mode Autentikasi CF:")
+        add_c1_label(5, "Mode Autentikasi CF")
         self.cloudflare_auth_mode_var = tk.StringVar(value=config.get("cloudflare_auth_mode", "none"))
         self.cloudflare_auth_mode_combo = tk_option_menu(
-            card1, self.cloudflare_auth_mode_var, ["query-key", "bearer", "x-api-key", "x-admin-auth", "none"], width=12
+            card1, self.cloudflare_auth_mode_var, ["query-key", "bearer", "x-api-key", "x-admin-auth", "none"], width=18
         )
         add_c1_field(self.cloudflare_auth_mode_combo, 5)
 
-        add_c1_label(6, "Cloudflare API Base:")
+        add_c1_label(6, "Cloudflare API Base")
         self.cloudflare_api_base_var = tk.StringVar(value=config.get("cloudflare_api_base", ""))
-        self.cloudflare_api_base_entry = tk_entry(card1, textvariable=self.cloudflare_api_base_var, width=24)
+        self.cloudflare_api_base_entry = tk_entry(card1, textvariable=self.cloudflare_api_base_var, width=28)
         add_c1_field(self.cloudflare_api_base_entry, 6)
 
-        add_c1_label(7, "Cloudflare API Key:")
+        add_c1_label(7, "Cloudflare API Key")
         self.cloudflare_api_key_var = tk.StringVar(value=config.get("cloudflare_api_key", ""))
-        self.cloudflare_api_key_entry = tk_entry(card1, textvariable=self.cloudflare_api_key_var, width=24)
+        self.cloudflare_api_key_entry = tk_entry(card1, textvariable=self.cloudflare_api_key_var, width=28, show="•")
         add_c1_field(self.cloudflare_api_key_entry, 7)
 
-        add_c1_label(8, "Jalur CF:")
+        add_c1_label(8, "Jalur CF")
         self.cloudflare_paths_var = tk.StringVar(
             value=",".join(
                 [
@@ -708,122 +521,84 @@ class GrokRegisterGUI:
                 ]
             )
         )
-        self.cloudflare_paths_entry = tk_entry(card1, textvariable=self.cloudflare_paths_var, width=24)
+        self.cloudflare_paths_entry = tk_entry(card1, textvariable=self.cloudflare_paths_var, width=28)
         add_c1_field(self.cloudflare_paths_entry, 8)
 
-
-        # CARD 2: grok2api & Pool
-        card2 = tk.Frame(
-            cards_frame,
-            bg=THEME_CARD_BG,
-            highlightthickness=1,
-            highlightbackground=THEME_BORDER,
-            bd=0,
-            padx=16,
-            pady=16,
-        )
-        card2.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(6, 0))
+        # CARD 2: API & Pool
+        card2 = tk.Frame(cards_frame, bg=THEME_CARD_BG, highlightthickness=1, highlightbackground=THEME_BORDER, bd=0, padx=18, pady=18)
+        card2.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(10, 0))
         card2.grid_columnconfigure(1, weight=1)
-
-        tk.Label(
-            card2,
-            text="Integrasi API & Pool grok2api",
-            font=("Segoe UI Semibold", 11),
-            bg=THEME_CARD_BG,
-            fg=THEME_TEXT_PRIMARY,
-        ).grid(row=0, column=0, columnspan=2, sticky=tk.W, pady=(0, 12))
+        tk.Label(card2, text="◉  Integrasi API & Pool grok2api", font=FONT_HEAD_MD, bg=THEME_CARD_BG, fg=THEME_TEXT_PRIMARY).grid(row=0, column=0, columnspan=2, sticky=tk.W, pady=(0, 14))
 
         def add_c2_label(row, text):
-            tk_label(card2, text=text, bg=THEME_CARD_BG, fg=THEME_TEXT_MUTED).grid(
-                row=row, column=0, sticky=tk.W, padx=(0, 10), pady=4
-            )
+            tk_label(card2, text=text, bg=THEME_CARD_BG, fg=THEME_TEXT_MUTED, font=FONT_CAPS).grid(row=row, column=0, sticky=tk.W, padx=(0, 12), pady=6)
 
         def add_c2_field(widget, row):
-            widget.grid(row=row, column=1, sticky=tk.EW, pady=4)
+            widget.grid(row=row, column=1, sticky=tk.EW, pady=6)
 
-        # C2 Fields
-        add_c2_label(1, "grok2api Pool Lokal:")
+        add_c2_label(1, "grok2api Pool Lokal")
         self.grok2api_local_auto_var = tk.BooleanVar(value=bool(config.get("grok2api_auto_add_local", True)))
         self.grok2api_local_auto_check = tk_checkbutton(card2, variable=self.grok2api_local_auto_var, bg=THEME_CARD_BG)
         add_c2_field(self.grok2api_local_auto_check, 1)
 
-        add_c2_label(2, "Nama Pool grok2api:")
+        add_c2_label(2, "Nama Pool grok2api")
         self.grok2api_pool_name_var = tk.StringVar(value=str(config.get("grok2api_pool_name", "ssoBasic")))
-        self.grok2api_pool_name_combo = tk_option_menu(
-            card2, self.grok2api_pool_name_var, ["ssoBasic", "ssoSuper"], width=12
-        )
+        self.grok2api_pool_name_combo = tk_option_menu(card2, self.grok2api_pool_name_var, ["ssoBasic", "ssoSuper"], width=18)
         add_c2_field(self.grok2api_pool_name_combo, 2)
 
-        add_c2_label(3, "Token Lokal (token.json):")
+        add_c2_label(3, "Token Lokal (json)")
         self.grok2api_local_file_var = tk.StringVar(value=str(config.get("grok2api_local_token_file", "")))
-        self.grok2api_local_file_entry = tk_entry(card2, textvariable=self.grok2api_local_file_var, width=24)
+        self.grok2api_local_file_entry = tk_entry(card2, textvariable=self.grok2api_local_file_var, width=28)
         add_c2_field(self.grok2api_local_file_entry, 3)
 
-        add_c2_label(4, "grok2api Pool Remote:")
+        add_c2_label(4, "grok2api Pool Remote")
         self.grok2api_remote_auto_var = tk.BooleanVar(value=bool(config.get("grok2api_auto_add_remote", False)))
         self.grok2api_remote_auto_check = tk_checkbutton(card2, variable=self.grok2api_remote_auto_var, bg=THEME_CARD_BG)
         add_c2_field(self.grok2api_remote_auto_check, 4)
 
-        add_c2_label(5, "Base Remote grok2api:")
+        add_c2_label(5, "Base Remote")
         self.grok2api_remote_base_var = tk.StringVar(value=str(config.get("grok2api_remote_base", "")))
-        self.grok2api_remote_base_entry = tk_entry(card2, textvariable=self.grok2api_remote_base_var, width=24)
+        self.grok2api_remote_base_entry = tk_entry(card2, textvariable=self.grok2api_remote_base_var, width=28)
         add_c2_field(self.grok2api_remote_base_entry, 5)
 
-        add_c2_label(6, "app_key Remote:")
+        add_c2_label(6, "app_key Remote")
         self.grok2api_remote_key_var = tk.StringVar(value=str(config.get("grok2api_remote_app_key", "")))
-        self.grok2api_remote_key_entry = tk_entry(card2, textvariable=self.grok2api_remote_key_var, width=24)
+        self.grok2api_remote_key_entry = tk_entry(card2, textvariable=self.grok2api_remote_key_var, width=28, show="•")
         add_c2_field(self.grok2api_remote_key_entry, 6)
 
-        add_c2_label(7, "Opsi Pendaftaran:")
+        add_c2_label(7, "Opsi Pendaftaran")
         self.nsfw_var = tk.BooleanVar(value=config.get("enable_nsfw", True))
         self.nsfw_check = tk_checkbutton(card2, text="Aktifkan NSFW setelah pendaftaran", variable=self.nsfw_var, bg=THEME_CARD_BG)
         add_c2_field(self.nsfw_check, 7)
 
-        # Empty row to balance C2 height with C1
-        tk.Label(card2, text="", bg=THEME_CARD_BG).grid(row=8, column=0, pady=10)
-
-
-        # CARD 3: Log Aktivitas Sesi (Bottom)
-        log_card = tk.Frame(
-            main_area,
-            bg=THEME_CARD_BG,
-            highlightthickness=1,
-            highlightbackground=THEME_BORDER,
-            bd=0,
-            padx=16,
-            pady=16,
-        )
+        # Terminal log card
+        log_card = tk.Frame(main_area, bg=THEME_CARD_BG, highlightthickness=1, highlightbackground=THEME_BORDER, bd=0)
         log_card.pack(fill=tk.BOTH, expand=True)
         log_card.grid_columnconfigure(0, weight=1)
         log_card.grid_rowconfigure(1, weight=1)
 
-        tk.Label(
-            log_card,
-            text="Log Aktivitas Sesi",
-            font=("Segoe UI Semibold", 11),
-            bg=THEME_CARD_BG,
-            fg=THEME_TEXT_PRIMARY,
-        ).grid(row=0, column=0, sticky=tk.W, pady=(0, 10))
+        log_header = tk.Frame(log_card, bg=THEME_CARD_HEADER, padx=16, pady=10)
+        log_header.grid(row=0, column=0, sticky=tk.EW)
+        tk.Label(log_header, text=">_  Log Aktivitas Sesi", font=FONT_CAPS, bg=THEME_CARD_HEADER, fg=THEME_TEXT_PRIMARY).pack(side=tk.LEFT)
+        tk.Label(log_header, text="● REAL-TIME MONITORING", font=FONT_CAPS, bg=THEME_CARD_HEADER, fg=THEME_ERROR).pack(side=tk.RIGHT)
 
         self.log_text = scrolledtext.ScrolledText(
             log_card,
-            bg=THEME_INPUT_BG,
-            fg=THEME_TEXT_PRIMARY,
-            insertbackground=THEME_TEXT_PRIMARY,
-            selectbackground=THEME_BORDER_ACTIVE,
+            bg=THEME_TERMINAL_BG,
+            fg=THEME_TERMINAL_FG,
+            insertbackground=THEME_TERMINAL_FG,
+            selectbackground=THEME_PRIMARY,
             selectforeground="#ffffff",
             relief=tk.FLAT,
             borderwidth=0,
-            highlightthickness=1,
-            highlightbackground=THEME_BORDER,
-            highlightcolor=THEME_BORDER_ACTIVE,
-            font=("Consolas", 10),
+            highlightthickness=0,
+            font=FONT_CODE,
+            padx=16,
+            pady=14,
         )
         self.log_text.grid(row=1, column=0, sticky=tk.NSEW)
 
-        # Stats Variable binding (not used visually since we have cards, but kept for compatibility)
         self.stats_var = tk.StringVar(value="Sukses: 0 | Gagal: 0")
-
         self.log("[*] GUI Siap, Grok Mint by @MrPinguiiin")
         self.log(f"[*] Penyedia email saat ini: {self.email_provider_var.get()} | Jumlah registrasi: {self.count_var.get()}")
 
@@ -888,7 +663,7 @@ class GrokRegisterGUI:
         self.start_btn.config(state=tk.DISABLED if running else tk.NORMAL)
         self.stop_btn.config(state=tk.NORMAL if running else tk.DISABLED)
         self.status_var.set("BERJALAN" if running else "SIAP")
-        self.status_label.config(foreground="#3b82f6" if running else "#22c55e")
+        self.status_label.config(foreground=THEME_PRIMARY_SOFT if running else THEME_SUCCESS)
 
     def should_stop(self):
         return self.stop_requested or not self.is_running
