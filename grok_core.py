@@ -1572,18 +1572,20 @@ def import_cpa_to_9router(
         if not db_path.is_file():
             raise RuntimeError(f"9Router database not found: {db_path}")
 
+        backup_path: Path | None = None
         if not _9router_session_backed_up:
             backup_dir = db_path.parent / "backups" / "grok-mint"
             backup_dir.mkdir(parents=True, exist_ok=True)
             os.chmod(backup_dir, 0o700)
-            backup_path = backup_dir / "latest.sqlite"
-            fd = os.open(backup_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            candidate = backup_dir / "latest.sqlite"
+            fd = os.open(candidate, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
             os.close(fd)
             try:
                 with sqlite3.connect(str(db_path), timeout=30) as source:
-                    with sqlite3.connect(str(backup_path)) as destination:
+                    with sqlite3.connect(str(candidate)) as destination:
                         source.backup(destination)
-                os.chmod(backup_path, 0o600)
+                os.chmod(candidate, 0o600)
+                backup_path = candidate
                 log("[9router] backup created")
                 _9router_session_backed_up = True
             except Exception as backup_err:
@@ -1674,7 +1676,7 @@ def import_cpa_to_9router(
         "action": action,
         "id": connection_id,
         "email": email,
-        "backup": str(backup_path),
+        "backup": str(backup_path) if backup_path else None,
     }
 
 # ── CLI main ──────────────────────────────────────────────
